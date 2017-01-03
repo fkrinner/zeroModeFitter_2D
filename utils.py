@@ -60,8 +60,5 @@ def pinv(matrix, numLim = 1.e-13):
 
 def isValidPhaseSpace(m3pi, m2pi, mPi = 0.139):
 	if m3pi >= m2pi + mPi:
-		return True	
+		return True
 	return False
-
-
-

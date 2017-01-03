@@ -3,7 +3,7 @@ import plotfabi as pf
 import pyRootPwa
 import numpy as np
 import os
-
+from parseFiles import parseTH1D, parseTGraph
 os.system(". add_to_front PATH /nfs/mnemosyne/sys/slc6/contrib/texlive/2013/bin/x86_64-linux")
 import modernplotting.root
 import modernplotting.mpplot
@@ -66,6 +66,11 @@ class resultViewer:
 		self.sliceCanvas.SetWindowSize( 500,500)
 		self.argandCanvas.SetWindowSize(500,500)
 
+		self.corrColor = modernplotting.colors.colorScheme.blue
+		self.theoColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, .5)
+		self.dataColor = modernplotting.colors.colorScheme.gray
+		self.addiColor = modernplotting.colors.colorScheme.red
+
 	def getArgand(self, nBin, index = 0):
 		if index >= self.nHists:
 			raise IndexError("Bin index too large")
@@ -87,8 +92,6 @@ class resultViewer:
 		argand = pyRootPwa.ROOT.TGraphErrors(len(reals), np.asarray(reals, dtype = np.float64), np.asarray(imags, dtype = np.float64), np.asarray(reErr, np.float64), np.asarray(imErr, dtype = np.float64))
 		if index > 0:
 			argand.SetLineColor(index + 1)
-#			if index == 1:
-#				argand.SetLineColor(920 + 11)
 		else:
 			setAxesRange(argand)
 		return argand
@@ -99,8 +102,6 @@ class resultViewer:
 		intensHist = self.intensHists[index].ProjectionY("_py_"+str(index), nBin+1, nBin +1)
 		if index > 0:
 			intensHist.SetLineColor(index + 1)
-#			if index == 1:
-#				intensHist.SetLineColor(920 + 11)
 		return intensHist
 
 	def getMarkerLines(self, nBin):
@@ -158,12 +159,32 @@ class resultViewer:
 			elif cmd == 'p':
 				self.intensHists[0].SetMaximum(self.intensHists[0].GetMaximum()/1.2)
 			elif cmd == 'm':
-				iself.intensHists[0].SetMaximum(self.intensHists[0].GetMaximum()*1.2)
+				self.intensHists[0].SetMaximum(self.intensHists[0].GetMaximum()*1.2)
 			elif cmd == 'w':
 				self.writeBinToPdf(self.bin)
+			elif cmd == 't':
+				self.writeAmplFiles(self.bin)
 			else:
 				print "Unknown command '" + cmd + "'"
-			
+
+	def writeAmplFiles(self, nBin, index = 0):
+		name = raw_input("outputFileName:")
+		if name == "":
+			print "no name given"
+			return
+		with open(name + ".intens", 'w') as out:
+			hist = self.getSlice(nBin, index)
+			for i in range(hist.GetNbinsX()):
+				out.write(str(hist.GetXaxis().GetBinLowEdge(i+1)) + ' ' + str(hist.GetXaxis().GetBinUpEdge(i+1)) + ' ' + str(hist.GetBinContent(i+1)) + ' ' + str(hist.GetBinError(i+1)) + '\n')
+		with open(name + ".argand", 'w') as out:
+			argand = self.getArgand(nBin, index)
+			for i in range(argand.GetN()):
+				X  = argand.GetX()[i]
+				Y  = argand.GetY()[i]
+				XE = argand.GetErrorX(i)
+				YE = argand.GetErrorY(i)
+				out.write(str(X) + ' ' + str(XE) + ' ' + str(Y) + ' ' + str(YE) + '\n')
+
 	def writeBinToPdf(self, nBin):
 		style = modernplotting.mpplot.PlotterStyle()
 		twoDimPlotName = raw_input("Name of the 2D plot:")
@@ -172,54 +193,71 @@ class resultViewer:
 		else:
 			with modernplotting.toolkit.PdfWriter(twoDimPlotName) as pdfOutput:
 				plot = style.getPlot2D()
-#				plot.p1dAxisPos = [0.19, 0.16, 0., 0.77]
-
 				modernplotting.root.plotTH2D(self.intensHists[0], plot, maskValue = 0.)
-#				plot.setZshowColorBar()
 				plot.setZlim((0., self.intensHists[0].GetMaximum()))
 				plot.setXlabel(pf.mPiPiPi + ' ' + pf.MeVc2 )
-				plot.setYlabel(pf.mPiPi + ' ' + pf.MeVc2)
-#				plot.setZlabel("events")
+				plot.setYlabel(pf.mPiPi   + ' ' + pf.MeVc2)
 				pdfOutput.savefigAndClose()
-
-		slicePlotName = raw_input("Name of the intensity slice:")
+		addFiles = []
+		while True:
+			slicePlotName = raw_input("Name of the intensity slice:")
+			if slicePlotName.startswith(":"):
+				fileName = slicePlotName[1:]
+				if not os.path.isfile(fileName):
+					print "file '" + fileName + "' does not exist"
+				else:
+					addFiles.append(fileName)
+					print "Added '" + fileName + "' as additional plot"
+			else:
+				break
 		if slicePlotName == "":
 			print "No name given, skipping the intensity slice"
 		else:
 			with modernplotting.toolkit.PdfWriter(slicePlotName) as pdfOutput:
 				plot = style.getPlot1D()
 				hists = [self.getSlice(nBin, index) for index in range(self.nHists)]
-				modernplotting.root.plotTH1D(hists[1], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':1, 'color':modernplotting.colors.colorScheme.gray})
+				for fn in addFiles:
+					hist = parseTH1D(fn)
+					modernplotting.root.plotTH1D(hist, plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':0, 'color':self.addiColor})
+				modernplotting.root.plotTH1D(hists[1], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':1, 'color':self.dataColor})
 				if len(hists) > 2:
-					lighterColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, .5)
-					modernplotting.root.plotTH1D(hists[2], plot, markerDefinitions = { 'zorder':2, 'color': lighterColor})
-				modernplotting.root.plotTH1D(hists[0], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':3, 'color':modernplotting.colors.colorScheme.blue})
+					modernplotting.root.plotTH1D(hists[2], plot, markerDefinitions = { 'zorder':2, 'color': self.theoColor})
+				modernplotting.root.plotTH1D(hists[0], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':3, 'color':self.corrColor})
 				plot.setXlabel(pf.mPiPi + ' ' + pf.MeVc2)
 				plot.setYlabel(pf.intens + ' ' + pf.AU)
 				plot.setYlim(0.,hists[0].GetMaximum()*1.2)
 				pdfOutput.savefigAndClose()
 
-		argandPlotName = raw_input("Name of the argand plot:")
+		addFiles = []
+		while True:
+			argandPlotName = raw_input("Name of the argand plot:")
+			if argandPlotName.startswith(":"):
+				fileName = argandPlotName[1:]
+				if not os.path.isfile(fileName):
+					print "file '" + fileName + "' does not exist"
+				else:
+					addFiles.append(fileName)
+					print "Added '" + fileName + "' as additional plot"
+			else:
+				break
+
 		if argandPlotName == "":
 			print "No name given, skipping the argand plot"
 		else:
 			with modernplotting.toolkit.PdfWriter(argandPlotName) as pdfOutput:
 				plot = style.getPlot1D()
 				argands = [self.getArgand(nBin, index) for index in range(self.nHists)]
-				modernplotting.root.plotTH1D(argands[1], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 1, 'color':modernplotting.colors.colorScheme.gray})
+				for fn in addFiles:
+					graph = parseTGraph(fn)
+					modernplotting.root.plotTH1D(graph, plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 0, 'color':self.addiColor})
+				modernplotting.root.plotTH1D(argands[1], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 1, 'color':self.dataColor})
 				if len(argands) > 2:
-					lighterColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, .5)
-					modernplotting.root.plotTH1D(argands[2], plot, maskValue = 0.,markerDefinitions = {'marker' : None, 'linestyle' : 'solid', 'zorder' : 2, 'color': lighterColor })
-				modernplotting.root.plotTH1D(argands[0], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 3, 'color' : modernplotting.colors.colorScheme.blue})
+					modernplotting.root.plotTH1D(argands[2], plot, maskValue = 0.,markerDefinitions = {'marker' : None, 'linestyle' : 'solid', 'zorder' : 2, 'color': self.theoColor})
+				modernplotting.root.plotTH1D(argands[0], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 3, 'color' : self.corrColor})
 				ranges = setAxesRange(argands[0])
 				plot.setXlabel(pf.realPart + ' ' + pf.AU)
 				plot.setYlabel(pf.imagPart + ' ' + pf.AU)
 				plot.setXlim(ranges[0])
 				plot.setYlim(ranges[1])
 				pdfOutput.savefigAndClose()
-
-
-	
-
-
 
