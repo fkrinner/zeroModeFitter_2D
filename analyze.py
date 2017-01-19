@@ -4,28 +4,52 @@ import numpy as np
 import numpy.linalg as la
 from allBinsClass import allBins
 from massBinClass import massBin
+from modes import PHASE, INTENS
 from resultViewerClass import resultViewer
-import sys
+import os, sys
 from utils import zeroForSectors, getZeroHistBorders, renormToBinWidth
 import parameterizationClasses as pc
 import scipy.optimize
 from removeZeroModes import removeCertainZeroModes
 from fixedparameterizationPaths import getFileNameForSector
 
-def main():
+def main(rhoFileName = ""):
 	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
-#	sectors = ["0-+0+[pi,pi]1--PiP","0-+0+[pi,pi]0++PiS"]
-#	sectors = ["1++0+[pi,pi]1--PiS","1++0+[pi,pi]0++PiP"]
-	sectors = ["2-+0+[pi,pi]0++PiD","2-+0+[pi,pi]1--PiP","2-+0+[pi,pi]1--PiF","2-+0+[pi,pi]2++PiS"]
+#	sectors = ["0-+0+[pi,pi]0++PiS","0-+0+[pi,pi]1--PiP"]
+#	sectors = ["1++0+[pi,pi]0++PiP","1++0+[pi,pi]1--PiS"]
+#	sectors = ["2-+0+[pi,pi]0++PiD","2-+0+[pi,pi]1--PiP","2-+0+[pi,pi]1--PiF","2-+0+[pi,pi]2++PiS"]
 #	sectors = ["2-+0+[pi,pi]1--PiP"]
 #	sectors = ["1-+1+[pi,pi]1--PiP"]
+#	sectors = ["1++0+[pi,pi]0++PiP"]
 #	sectors = ["2++1+[pi,pi]1--PiD"]
 #	sectors = ["0-+0+[pi,pi]1--PiP"]
 #	sectors = ["2-+0+[pi,pi]2++PiS"]
+#	sectors = ["2-+1+[pi,pi]1--PiP"]
 #	sectors = ["1++0+[pi,pi]1--PiS","1++0+[pi,pi]0++PiP"]
-#	sectors = ["1++0+[pi,pi]1--PiS"]
+#	sectors = ["1++1+[pi,pi]1--PiS"]
+	sectors = ["1++0+[pi,pi]1--PiS"]
 
-	sectors = [sectors[3]]
+#	sectors = [sectors[1]]
+
+	doSpecialOneBinFit = -15 # negative values turn it off
+
+	sectorUseMap = { # Defines, if for the given sector a theory curve will be used
+		"0-+0+[pi,pi]0++PiS" : True,
+		"0-+0+[pi,pi]1--PiP" : True,
+		"1++0+[pi,pi]0++PiP" : True, 
+		"1++0+[pi,pi]1--PiS" : True, 
+		"2-+0+[pi,pi]0++PiD" : True, 
+		"2-+0+[pi,pi]1--PiP" : True, 
+		"2-+0+[pi,pi]1--PiF" : True, 
+		"2-+0+[pi,pi]2++PiS" : True
+	}
+
+	sectorRangeMap = {}
+
+	for sector in sectors:
+		if '1--' in sector:
+			pass
+#			sectorRangeMap[sector] = (0.55,1.00)
 
 	tBin             = 0
 	startBin         = 10
@@ -33,39 +57,56 @@ def main():
 	polynomialDegree = 1
 	modelMode        = "fixedShapes"
 #	modelMode        = "BW"
+#	modelMode        = "explicitRhoFile"
 	useSmooth        = False
+
 	if modelMode == "BW" or modelMode == "2BW":
-		rho = pc.breitWigner()
-#		rho.parameters = [.77549, .1491]
-		rho.parameters = [1.27549, .100]
+#		rho = pc.breitWigner()
+		rho = pc.rpwaBreitWignerInt(0.13957018,0.13957018,0.13957018,1,1)
+		rho.parameters = [.77549, .1491]
+#		rho.weightIntens = True
+#		rho.parameters = [1.27549, .100]
 		rhoPrime = pc.breitWigner()
 		rhoPrime.parameters = [1.570, 0.144]
-		firstWaveModel = [rho]
+		rhoModel = [rho]
 		if modelMode == "2BW":
-			firstWaveModel.append(rhoPrime)
-		waveModel = {0:firstWaveModel}
-	elif modelMode == "omnesReal":
-		omnes = pc.omnesFunctionPolynomial(polynomialswDegree, True)
-		firstWaveModel = [omnes]
-		waveModel = {0:firstWaveModel}
-	elif modelMode == "omnesComplex":
-		omnes = pc.omnesFunctionPolynomial(polynomialDegree, False)
-		firstWaveModel = [omnes]
-		waveModel = {0:firstWaveModel}
+			rhoModel.append(rhoPrime)
+		waveModel = {}
+		for sector in sectors:
+			if '1--' in sector:
+				waveModel[sector] = rhoModel
+
 	elif modelMode == "fixedShapes":
 		useBF       = False
+		merge0pp    = True
 		polyDegree  = 0
 		polyComplex = True
 		waveModel   = {}
-		for s, sector in enumerate(sectors):
+		for sector in sectors:
+			if sector in sectorUseMap:
+				if not sectorUseMap[sector]:
+					continue
 			model = []
-			fileNames = getFileNameForSector(sector, useBF)
+			fileNames = getFileNameForSector(sector, useBF, merge0pp)
+			print fileNames
 			for fn in fileNames:
 				param = pc.fixedParameterization(fn, polynomialDegree  = polyDegree, complexPolynomial = polyComplex)
 				model.append(param)
-			waveModel[s] = model
-	
-	
+			waveModel[sector] = model
+#		for sector in sectors: # Ovveride with free rho parameterization
+#			if '1--' in sector:
+#				rho = pc.rpwaBreitWignerInt(0.13957018,0.13957018,0.13957018,1,0) # Override here
+#				rho.parameters = [.77549, .1491]
+#				waveModel[sector] = [rho]
+
+	elif modelMode == "explicitRhoFile":
+		if not os.path.isfile(rhoFileName):
+			raise IOError("Rho file does not exist")
+		param   = pc.fixedParameterization(rhoFileName, polynomialDegree  = 0, complexPolynomial = False)
+		waveModel = {}
+		for sector in sectors:
+			if '1--' in sector:
+				waveModel[sector] = [param]
 
 	with root_open(inFileName, "READ") as inFile:
 		histNames = GetKeyNames(inFile)
@@ -107,7 +148,6 @@ def main():
 			comaHists.append(comaHist)
 		ab = allBins(startBin, stopBin, histListReal, histListImag, histListNorm, histListIndx, comaHists)
 
-
 		zeroCount = 0
 		zeroHistList  = []
 		eigenHistList = []
@@ -136,15 +176,50 @@ def main():
 
 #		ab.unifyComa()
 
-		if not useSmooth:
+		special = True
+
+		if special:
+			for mb in ab.massBins:
+				mb.setZeroTheory()
+			from random import random
 			ab.initChi2(waveModel)
+			nBin = 25
+			leBin = ab.massBins[nBin - startBin]
+			pars  = [random() for _ in range(leBin.nParAll())]
+			print leBin.phaseChi2(pars)
+			res = scipy.optimize.minimize(leBin.phaseChi2, pars)
+			print "phaseFit gives for bin",nBin 
+			print "Giving a Chi2 of:",res.fun
+			paramsZ = [res.x[0], res.x[1]] * 100 # Very, very bad hack...
 	
+		if doSpecialOneBinFit >= 0:
+			specialBin = ab.massBins[doSpecialOneBinFit]
+			specialBin.initChi2(waveModel)
+			print "Doing special fit for: ",+ specialBin.bin3pi
+			pars = [.77549, .1491]
+			if modelMode == "explicitRhoFile":
+				return specialBin.chi2([])
+			res = scipy.optimize.minimize(specialBin.chi2, pars)
+			hi = res.hess_inv
+			print "m0 = ",res.x[0],"+-",hi[0,0]**.5
+			print "G0 = ",res.x[1],"+-",hi[1,1]**.5
+			print "Giving a Chi2 of:",res.fun
+
+			sys.exit(0)
+
+		if not useSmooth and not special:
+			ab.initChi2(waveModel)
+			ab.setMassRanges(sectorRangeMap)
 			totalPars = []
 			for k in waveModel:
 				for f in waveModel[k]:
 					totalPars += f.parameters
 			if not len(totalPars) == 0:
-				scipy.optimize.minimize(ab.chi2, totalPars)
+				res = scipy.optimize.minimize(ab.chi2, totalPars)
+				hi = res.hess_inv
+				print "m0 = ",res.x[0],"+-",hi[0,0]**.5
+				print "G0 = ",res.x[1],"+-",hi[1,1]**.5
+				print "Giving a Chi2 of:",res.fun
 			for k in waveModel:
 				for f in waveModel[k]:
 					print f.parameters
@@ -153,20 +228,22 @@ def main():
 			paramsZ      = ab.linearizeZeroModeParameters(params)
 			ab.setTheoryFromOwnFunctions(params, True)
 			print "The final chi2 =",chi2
-		else:
+		elif not special:
 			A,B,C   =  ab.getSmoothnessABC()
 			paramsZ = -np.dot(la.inv(A + np.transpose(A)), B)
-	
 
 		intenses = []
 		reals    = []
 		imags    = []
+		phases   = []
 		intensD  = []
 		realsD   = []
 		imagsD   = []
+		phasesD  = []
 		intensT  = []
 		realsT   = []
 		imagsT   = []
+		phasesT  = []
 
 		for rh in histListReal:
 			Ih = rh.Clone()
@@ -181,6 +258,10 @@ def main():
 			imagH.Reset()
 			imags.append(imagH)
 
+			phaseH = rh.Clone()
+			phaseH.Reset()
+			phases.append(phaseH)
+
 			ID = rh.Clone()
 			ID.Reset()
 			intensD.append(ID)
@@ -192,6 +273,10 @@ def main():
 			iD = rh.Clone()
 			iD.Reset()
 			imagsD.append(iD)
+
+			pD = rh.Clone()
+			pD.Reset()
+			phasesD.append(pD)
 
 			IT = rh.Clone()
 			IT.Reset()
@@ -205,20 +290,26 @@ def main():
 			iT.Reset()
 			imagsT.append(iT)
 
+			pT = rh.Clone()
+			pT.Reset()
+			phasesT.append(pT)
+
 		ab.fillHistograms(paramsZ, intenses)
-		ab.fillHistograms(paramsZ, reals, mode = "REAL")
-		ab.fillHistograms(paramsZ, imags, mode = "IMAG")
+		ab.fillHistograms(paramsZ, reals,  mode = "REAL")
+		ab.fillHistograms(paramsZ, imags,  mode = "IMAG")
+		ab.fillHistograms(paramsZ, phases, mode = "PHASE")
 		zeroP = [0.]*len(paramsZ)
 		ab.fillHistograms(zeroP, intensD)
-		ab.fillHistograms(zeroP, realsD, mode = "REAL")
-                ab.fillHistograms(zeroP, imagsD, mode = "IMAG")
+		ab.fillHistograms(zeroP, realsD,  mode = "REAL")
+                ab.fillHistograms(zeroP, imagsD,  mode = "IMAG")
+                ab.fillHistograms(zeroP, phasesD, mode = "PHASE")
 
 		if not useSmooth:
-			ab.fillHistograms(zeroP, intensT, mode = "INTENSTHEO")
-			ab.fillHistograms(zeroP, realsT,  mode = "REALTHEO"  )
-        	        ab.fillHistograms(zeroP, imagsT,  mode = "IMAGTHEO"  )
+			ab.fillHistograms(zeroP, intensT,  mode = "INTENSTHEO")
+			ab.fillHistograms(zeroP, realsT,   mode = "REALTHEO"  )
+        	        ab.fillHistograms(zeroP, imagsT,   mode = "IMAGTHEO"  )
+        	        ab.fillHistograms(zeroP, phasesT,  mode = "PHASETHEO"  )
 
-		
 		for i in range(len(histListReal)):
 			renormToBinWidth(intenses[i]  )
 			renormToBinWidth(intensD[i]   )
@@ -239,9 +330,9 @@ def main():
 				if not allIsZero:
 					break # # # # # # # # # # # # # # # # # 
 			if not allIsZero:
-				rv = resultViewer([intenses[i], intensD[i], intensT[i]],[reals[i], realsD[i], realsT[i]],[imags[i], imagsD[i], imagsT[i]])
+				rv = resultViewer([intenses[i], intensD[i], intensT[i]],[reals[i], realsD[i], realsT[i]],[imags[i], imagsD[i], imagsT[i]], [phases[i], phasesD[i], phasesT[i]])
 			else:
-					rv = resultViewer([intenses[i], intensD[i]],[reals[i], realsD[i]],[imags[i], imagsD[i]])
+				rv = resultViewer([intenses[i], intensD[i]],[reals[i], realsD[i]],[imags[i], imagsD[i]],[phases[i], phasesD[i]])
 			rv.run()
 
 if __name__ == "__main__":

@@ -9,7 +9,8 @@ def removeCertainZeroModes(zeroHists, eigenvalues):
 		return
 	if not len(eigenvalues) == len(zeroHists):
 		raise ValueError("removeCertainZeroModes(...): Sizes do not match")
-#	removeAllButOne2mpModes(zeroHists, eigenvalues)
+	removeAllButOne2mpModes(zeroHists, eigenvalues)
+#	setExplicitelyToZero(zeroHists, ['zero2_0']) # in the MC results, 'zero3_0', 'zero2_0' and 'zero4_0' are 2mp zero-modes
 
 def removeAllButOne2mpModes(zeroHists, eigenvalues):
 	"""
@@ -30,6 +31,7 @@ def removeAllButOne2mpModes(zeroHists, eigenvalues):
 			ev = eigenvalues[i_hist].GetBinContent(bin+1)
 			evList.append((ev, i_hist))
 		evList.sort()
+		evList.reverse()
 		skipped = False
 		for pp in evList:
 			if pp[0] == 0.:
@@ -45,3 +47,25 @@ def removeAllButOne2mpModes(zeroHists, eigenvalues):
 			else:
 				for binY in range(zeroHists[pp[1]].GetNbinsY()):
 					zeroHists[pp[1]].SetBinContent(bin+1, binY+1, 0.)
+#	for bin in range(nBins):
+#		countnonZer = 0
+#		for i in zmpModes:
+#			isZero = True
+#			for bb in range(zeroHists[i].GetNbinsY()):
+#				if not zeroHists[i].GetBinContent(bin+1, bb+1) == 0.:
+#					isZero = False
+#					break
+#			if not isZero:
+#				countnonZer += 1
+#		print bin, countnonZer
+
+def setExplicitelyToZero(zeroHists, histNames):
+	for hist in zeroHists:
+		if hist.GetName() in histNames:
+			print "Removing: '" + hist.GetName() + "'"
+			for i in range(hist.GetNbinsX()):
+				for j in range(hist.GetNbinsY()):
+					hist.SetBinContent(i+1, j+1, 0.)
+
+
+

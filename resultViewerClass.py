@@ -2,13 +2,15 @@ from fabi import getch
 import plotfabi as pf
 import pyRootPwa
 import numpy as np
-import os
+import os, sys
+from modes import INTENS, PHASE
 from parseFiles import parseTH1D, parseTGraph
 os.system(". add_to_front PATH /nfs/mnemosyne/sys/slc6/contrib/texlive/2013/bin/x86_64-linux")
 import modernplotting.root
 import modernplotting.mpplot
 import modernplotting.colors
 import modernplotting.toolkit
+
 
 def findMinBin(hist):
 	for i in range(0,hist.GetNbinsX()):
@@ -45,8 +47,45 @@ def setAxesRange(graph):
 		ranges = ((xMin - delRange, xMax + delRange), (yMin, yMax))
 	return ranges
 
+def getStdCmd():
+	print "00 : 0mp0pp"
+	print "01 : 0mp1mm"
+	print "------------"
+	print "10 : 1pp0pp"
+	print "11 : 1pp1mm"
+	print "------------"
+	print "20 : 2mp0pp"
+	print "21P: 2mp1mmP"
+	print "21F: 2mp1mmF"
+	print "22 : 2mp2pp"
+	mode = raw_input()
+	if mode == '00':
+		return ["", "./results/0mp0ppIntens.pdf", ["./results/0mp0pp_only0pp.intens", "./results/0mp0pp_only1mm.intens"], 
+		            "./results/0mp0ppArgand.pdf", ["./results/0mp0pp_only0pp.argand", "./results/0mp0pp_only1mm.argand"]]
+	if mode == '01':
+		return ["", "./results/0mp1mmIntens.pdf", ["./results/0mp1mm_only0pp.intens", "./results/0mp1mm_only1mm.intens"], 
+		            "./results/0mp1mmArgand.pdf", ["./results/0mp1mm_only0pp.argand", "./results/0mp1mm_only1mm.argand"]]
+	if mode == '10':
+		return ["", "./results/1pp0ppIntens.pdf", ["./results/1pp0pp_only0pp.intens", "./results/1pp0pp_only1mm.intens"], 
+		            "./results/1pp0ppArgand.pdf", ["./results/1pp0pp_only0pp.argand", "./results/1pp0pp_only1mm.argand"]]
+	if mode == '11':
+		return ["", "./results/1pp1mmIntens.pdf", ["./results/1pp1mm_only0pp.intens","./results/1pp1mm_only0pp.intens"], 
+		            "./results/1pp1mmArgand.pdf", ["./results/1pp1mm_only0pp.argand", "./results/1pp1mm_only1mm.argand"]]
+	if mode == "20":
+		return ["", "./results/2mp0ppIntens.pdf", ["./results/2mp0pp_only0pp.intens","./results/2mp0pp_only1mmP.intens","./results/2mp0pp_only1mmF.intens","./results/2mp0pp_only2pp.intens"], 
+		            "./results/2mp0ppArgand.pdf", ["./results/2mp0pp_only0pp.argand","./results/2mp0pp_only1mmP.argand","./results/2mp0pp_only1mmF.argand","./results/2mp0pp_only2pp.argand"]]
+	if mode == "21P":
+		return ["", "./results/2mp1mmPIntens.pdf", ["./results/2mp1mmP_only0pp.intens","./results/2mp1mmP_only1mmP.intens","./results/2mp1mmP_only1mmF.intens","./results/2mp1mmP_only2pp.intens"], 
+		            "./results/2mp1mmPArgand.pdf", ["./results/2mp1mmP_only0pp.argand","./results/2mp1mmP_only1mmP.argand","./results/2mp1mmP_only1mmF.argand","./results/2mp1mmP_only2pp.argand"]]
+	if mode == "21F":
+		return ["", "./results/2mp1mmFIntens.pdf", ["./results/2mp1mmF_only0pp.intens","./results/2mp1mmF_only1mmP.intens","./results/2mp1mmF_only1mmF.intens","./results/2mp1mmF_only2pp.intens"], 
+		            "./results/2mp1mmFArgand.pdf", ["./results/2mp1mmF_only0pp.argand","./results/2mp1mmF_only1mmP.argand","./results/2mp1mmF_only1mmF.argand","./results/2mp1mmF_only2pp.argand"]]
+	if mode == "22":
+		return ["", "./results/2mp2ppIntens.pdf", ["./results/2mp2pp_only0pp.intens","./results/2mp2pp_only1mmP.intens","./results/2mp2pp_only1mmF.intens","./results/2mp2pp_only2pp.intens"], 
+		            "./results/2mp2ppArgand.pdf", ["./results/2mp2pp_only0pp.argand","./results/2mp2pp_only1mmP.argand","./results/2mp2pp_only1mmF.argand","./results/2mp2pp_only2pp.argand"]]
+
 class resultViewer:
-	def __init__(self, intensHists, realHists, imagHists, startBin = 30):
+	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 25):
 		self.nHists       = len(intensHists)
 		if self.nHists < 1:
 			raise ValueError("No histograms given")
@@ -57,19 +96,29 @@ class resultViewer:
 		self.intensHists  = intensHists
 		self.realHists    = realHists
 		self.imagHists    = imagHists
-		if not len(self.realHists) ==self. nHists or not len(self.imagHists) == self.nHists:
+		self.phaseHists   = phaseHists
+		if not len(self.realHists) ==self. nHists or not len(self.imagHists) == self.nHists or not len(self.phaseHists) == self.nHists:
 			raise ValueError("Size of histograms does not match")
 		self.intensCanvas = pyRootPwa.ROOT.TCanvas("Intensity","Intensity")
 		self.sliceCanvas  = pyRootPwa.ROOT.TCanvas("IntensitySlice","IntensitySlice")
 		self.argandCanvas = pyRootPwa.ROOT.TCanvas("Argand"        ,"Argand"        )
+		self.phaseCanvas  = pyRootPwa.ROOT.TCanvas("Phase"        ,"Phase"        )
 		self.intensCanvas.SetWindowSize(500,500)
 		self.sliceCanvas.SetWindowSize( 500,500)
 		self.argandCanvas.SetWindowSize(500,500)
+		self.phaseCanvas.SetWindowSize(500,500)
 
 		self.corrColor = modernplotting.colors.colorScheme.blue
 		self.theoColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, .5)
-		self.dataColor = modernplotting.colors.colorScheme.gray
-		self.addiColor = modernplotting.colors.colorScheme.red
+		self.dataColor = modernplotting.colors.colorScheme.red
+		self.addiColor = modernplotting.colors.colorScheme.gray
+
+		self.plotCorr  = True
+		self.plotTheo  = True
+		self.plotData  = True
+
+		self.mMin = 0.27
+		self.mMax = 1.36
 
 	def getArgand(self, nBin, index = 0):
 		if index >= self.nHists:
@@ -84,7 +133,7 @@ class resultViewer:
 			reR = self.realHists[index].GetBinError(  nBin + 1, i+1)
 			imR = self.imagHists[index].GetBinError(  nBin + 1, i+1)
 			if re == 0. and im == 0.:
-				break
+				continue
 			reals.append(re)
 			imags.append(im)
 			reErr.append(reR)
@@ -96,13 +145,16 @@ class resultViewer:
 			setAxesRange(argand)
 		return argand
 
-	def getSlice(self, nBin, index = 0):
+	def getSlice(self, nBin, index = 0, mode = INTENS):
 		if index >= self.nHists:
 			raise IndexError("Bin index too large")
-		intensHist = self.intensHists[index].ProjectionY("_py_"+str(index), nBin+1, nBin +1)
+		if mode == INTENS:
+			hist = self.intensHists[index].ProjectionY("_intens_"+str(index), nBin+1, nBin +1)
+		elif mode == PHASE:
+			hist = self.phaseHists[index].ProjectionY("_phase_"+str(index), nBin+1, nBin +1)
 		if index > 0:
-			intensHist.SetLineColor(index + 1)
-		return intensHist
+			hist.SetLineColor(index + 1)
+		return hist
 
 	def getMarkerLines(self, nBin):
 		yMin = self.intensHists[0].GetYaxis().GetXmin()
@@ -133,6 +185,15 @@ class resultViewer:
 			slices[-1].Draw("SAME")
 		self.sliceCanvas.Update()
 
+		self.phaseCanvas.cd()
+		self.phaseCanvas.Clear()
+		phases = [self.getSlice(nBin, mode = PHASE)]
+		phases[0].Draw()
+		for i in range(1, self.nHists):
+			slices.append(self.getSlice(nBin, index = i, mode = PHASE))
+			slices[-1].Draw("SAME")
+		self.phaseCanvas.Update()
+
 		self.argandCanvas.cd()
 		self.argandCanvas.Clear()
 		argands = [self.getArgand(nBin)]
@@ -148,6 +209,8 @@ class resultViewer:
 			cmd = getch()
 			if cmd == 'q':
 				break
+			if cmd == "Q":
+				sys.exit(0)
 			elif cmd == 's':
 				self.bin += 1
 				if self.bin == self.binMax:
@@ -164,8 +227,20 @@ class resultViewer:
 				self.writeBinToPdf(self.bin)
 			elif cmd == 't':
 				self.writeAmplFiles(self.bin)
+			elif cmd == 'e':
+				self.executeCommad()
+			elif cmd == '*':
+				stdCmd = getStdCmd()
+				self.writeBinToPdf(self.bin, stdCmd)
 			else:
 				print "Unknown command '" + cmd + "'"
+
+	def executeCommad(self):
+		commad = raw_input(">>> ")
+		try:
+			exec(commad)
+		except:
+			print "Could not execute '" + command + "'"
 
 	def writeAmplFiles(self, nBin, index = 0):
 		name = raw_input("outputFileName:")
@@ -184,32 +259,47 @@ class resultViewer:
 				XE = argand.GetErrorX(i)
 				YE = argand.GetErrorY(i)
 				out.write(str(X) + ' ' + str(XE) + ' ' + str(Y) + ' ' + str(YE) + '\n')
+		print "Written."
 
-	def writeBinToPdf(self, nBin):
+	def writeBinToPdf(self, nBin, stdCmd = None):
 		style = modernplotting.mpplot.PlotterStyle()
-		twoDimPlotName = raw_input("Name of the 2D plot:")
+		if stdCmd:
+			if not len(stdCmd) == 5:
+				raise IndexError("Wrond number of standard commands")
+		if stdCmd:
+			twoDimPlotName = stdCmd[0]
+		else:
+			twoDimPlotName = raw_input("Name of the 2D plot:")
 		if twoDimPlotName == "":
 			print "No name given, skipping the 2D plot"
+		elif not twoDimPlotName.endswith(".pdf"):
+			print "Invalid file name extension in file name: '" + twoDimPlotName + "' skipping 2d plot"
 		else:
 			with modernplotting.toolkit.PdfWriter(twoDimPlotName) as pdfOutput:
 				plot = style.getPlot2D()
 				modernplotting.root.plotTH2D(self.intensHists[0], plot, maskValue = 0.)
 				plot.setZlim((0., self.intensHists[0].GetMaximum()))
-				plot.setXlabel(pf.mPiPiPi + ' ' + pf.MeVc2 )
-				plot.setYlabel(pf.mPiPi   + ' ' + pf.MeVc2)
+				plot.setXlabel("\mThreePi [\SI{}{\GeVcc}]")
+				plot.setYlabel("\mTwoPi [\SI{}{\GeVcc}]")
 				pdfOutput.savefigAndClose()
-		addFiles = []
-		while True:
-			slicePlotName = raw_input("Name of the intensity slice:")
-			if slicePlotName.startswith(":"):
-				fileName = slicePlotName[1:]
-				if not os.path.isfile(fileName):
-					print "file '" + fileName + "' does not exist"
+		if stdCmd:
+			slicePlotName = stdCmd[1]
+			addFiles      = stdCmd[2]
+		else:
+			addFiles = []
+			while True:
+				slicePlotName = raw_input("Name of the intensity slice:")
+				if slicePlotName.endswith(".intens"):
+					fileName = slicePlotName
+					if not os.path.isfile(fileName):
+						print "file '" + fileName + "' does not exist"
+					else:
+						addFiles.append(fileName)
+						print "Added '" + fileName + "' as additional plot"
+				elif slicePlotName.endswith(".pdf") or slicePlotName == "":
+					break
 				else:
-					addFiles.append(fileName)
-					print "Added '" + fileName + "' as additional plot"
-			else:
-				break
+					print "Invalid file name given: '" + slicePlotName + "'"
 		if slicePlotName == "":
 			print "No name given, skipping the intensity slice"
 		else:
@@ -219,28 +309,38 @@ class resultViewer:
 				for fn in addFiles:
 					hist = parseTH1D(fn)
 					modernplotting.root.plotTH1D(hist, plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':0, 'color':self.addiColor})
-				modernplotting.root.plotTH1D(hists[1], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':1, 'color':self.dataColor})
-				if len(hists) > 2:
+				if self.plotData:
+					modernplotting.root.plotTH1D(hists[1], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':1, 'color':self.dataColor})
+				if len(hists) > 2 and self.plotTheo:
 					modernplotting.root.plotTH1D(hists[2], plot, markerDefinitions = { 'zorder':2, 'color': self.theoColor})
-				modernplotting.root.plotTH1D(hists[0], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':3, 'color':self.corrColor})
-				plot.setXlabel(pf.mPiPi + ' ' + pf.MeVc2)
+				if self.plotCorr:
+					modernplotting.root.plotTH1D(hists[0], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':3, 'color':self.corrColor})
+				plot.setXlabel("\mTwoPi [\SI{}{\MeVcc}]")
+				plot.setXlim(self.mMin,self.mMax)
 				plot.setYlabel(pf.intens + ' ' + pf.AU)
 				plot.setYlim(0.,hists[0].GetMaximum()*1.2)
 				pdfOutput.savefigAndClose()
-
-		addFiles = []
-		while True:
-			argandPlotName = raw_input("Name of the argand plot:")
-			if argandPlotName.startswith(":"):
-				fileName = argandPlotName[1:]
-				if not os.path.isfile(fileName):
-					print "file '" + fileName + "' does not exist"
+		if stdCmd:
+			argandPlotName = stdCmd[3]
+			addFiles       = stdCmd[4]
+			for fn in addFiles:
+				if not os.path.isfile(fn):
+					raise IOError("File '" + fn + "' does not exist")
+		else:
+			addFiles = []
+			while True:
+				argandPlotName = raw_input("Name of the argand plot:")
+				if argandPlotName.endswith(".argand"):
+					fileName = argandPlotName
+					if not os.path.isfile(fileName):
+						print "file '" + fileName + "' does not exist"
+					else:
+						addFiles.append(fileName)
+						print "Added '" + fileName + "' as additional plot"
+				elif argandPlotName.endswith(".pdf") or argandPlotName == "":
+					break
 				else:
-					addFiles.append(fileName)
-					print "Added '" + fileName + "' as additional plot"
-			else:
-				break
-
+					print "Invalid file name: '" + argandPlotName + "'"
 		if argandPlotName == "":
 			print "No name given, skipping the argand plot"
 		else:
@@ -250,14 +350,17 @@ class resultViewer:
 				for fn in addFiles:
 					graph = parseTGraph(fn)
 					modernplotting.root.plotTH1D(graph, plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 0, 'color':self.addiColor})
-				modernplotting.root.plotTH1D(argands[1], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 1, 'color':self.dataColor})
-				if len(argands) > 2:
+				if self.plotData:
+					modernplotting.root.plotTH1D(argands[1], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 1, 'color':self.dataColor})
+				if len(argands) > 2 and self.plotTheo:
 					modernplotting.root.plotTH1D(argands[2], plot, maskValue = 0.,markerDefinitions = {'marker' : None, 'linestyle' : 'solid', 'zorder' : 2, 'color': self.theoColor})
-				modernplotting.root.plotTH1D(argands[0], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 3, 'color' : self.corrColor})
+				if self.plotCorr:
+					modernplotting.root.plotTH1D(argands[0], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 3, 'color' : self.corrColor})
 				ranges = setAxesRange(argands[0])
 				plot.setXlabel(pf.realPart + ' ' + pf.AU)
 				plot.setYlabel(pf.imagPart + ' ' + pf.AU)
 				plot.setXlim(ranges[0])
 				plot.setYlim(ranges[1])
 				pdfOutput.savefigAndClose()
+		print "Writing to .pdf finished."
 

@@ -3,11 +3,13 @@ import numpy as np
 import numpy.linalg as la
 import utils
 from utils import getZeroHistSectors
-
+from cmath import phase, pi
+from modes import INTENS, PHASE
 
 class massBin:
 	def __init__(self, nBin, realHists, imagHists, normHists, indexHists, coma):
-		self.bin3pi = nBin
+		self.bin3pi    = nBin
+		self.binCenter = 0.52 + .04*nBin
 		if not len(realHists) == len(imagHists) or not len(imagHists) == len(normHists) or not len(normHists) == len(indexHists):
 			print "Numbers of histogams do not match:"
 			print "  real:",len(realHists)
@@ -64,19 +66,21 @@ class massBin:
 		self.zeroModes       = [ ]
 		self.zeroEigenvalues = [ ]
 		self.hasTheo         = False
+		self.hasMassRange    = False
 		self.chi2init        = False
+		self.specialCOMAs    = { }
 
 	def initChi2(self, sectorFuncMap):
 		self.nPar   =  0
 		self.nFuncs = [ ]
-		self.funcs  = sectorFuncMap
+		self.funcs  = self.toIntegerSectorMap(sectorFuncMap)
 		for s in range(self.nSect):
-			if not s in sectorFuncMap:
+			if not s in self.funcs:
 				self.nFuncs.append(0)
-				continue
-			self.nFuncs.append(len(sectorFuncMap[s]))
-			for f in sectorFuncMap[s]:
-				self.nPar += f.nPar
+			else:
+				self.nFuncs.append(len(self.funcs[s]))
+				for f in self.funcs[s]:
+					self.nPar += f.nPar
 		self.nFunc = 0
 		for val in self.nFuncs:
 			self.nFunc += val
@@ -88,18 +92,84 @@ class massBin:
 		if len(pars) > 0:
 			self.setShapeParameters(pars)
 		A,B,C = self.getOwnTheoryABC()
-		pars = -np.dot(B, la.inv(A + np.transpose(A)))
-		chi2 = np.dot(pars,np.dot(A,pars)) + np.dot(pars,B) + C
+		pars  = -np.dot(B, la.pinv(A + np.transpose(A)))
+		chi2  = np.dot(pars,np.dot(A,pars)) + np.dot(pars,B) + C
 		if returnParameters:
 			return chi2, pars
 		else:
 			return chi2
 
+	def nParAll(self):
+		return 2*self.nZero + 2*self.nFunc + self.nPar
+
+	def phaseChi2(self, pars):
+		return self.modeChi2(pars, PHASE)
+	
+	def intensChi2(self, pars):
+		return self.modeChi2(pars, INTENS)
+
+	def modeChi2(self, pars, mode = PHASE):
+		if not self.chi2init:
+			raise RuntimeError("chi2 not inited, cannot evaluate")
+		if not len(pars) == self.nParAll():
+			raise ValueError("Number of parameters does not match")
+		corrAmpl = self.getCorrectedAmplitudes(pars[:2*self.nZero])
+		self.setTheoryFromOwnFunctions(pars[2*self.nZero:2*(self.nZero + self.nFunc)])
+		self.setShapeParameters(pars[2*(self.nZero + self.nFunc):])
+		deltas = np.zeros((self.totalBins))
+		for s in range(self.nSect):
+			if not s in self.funcs:
+				continue
+			startBin = self.borders[s  ]
+			stopBin  = self.borders[s+1]
+			for bin in range(startBin, stopBin):
+				if self.hasMassRange and restrictToRange:
+					if s in self.massRanges:
+						binCenterMass = self.binCenters[bin]
+						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
+							continue
+				if mode == PHASE:
+					deltas[bin] = phase(corrAmpl[2*bin] + 1.j*corrAmpl[2*bin+1]) - phase(self.theo[bin])
+					if deltas[bin] > pi:
+						deltas[bin] -= 2*pi
+					if deltas[bin] < -pi:
+						deltas[bin] += 2*pi
+				elif mode == INTENS:
+					deltas[bin] = corrAmpl[2*bin]**2 + corrAmpl[2*bin+1]**2 - abs(self.theo[bin])**2
+		coma = utils.pinv(self.getSpecialComa(mode), self.pinvNumLim)
+		retVal = np.dot(deltas, np.dot(coma, deltas))
+		print "Call",retVal
+		return retVal
+
+	def getSpecialComa(self, mode = PHASE):
+		if mode in self.specialCOMAs:
+			return self.specialCOMAs[mode]
+		jacobian = np.zeros((self.totalBins, 2*self.totalBins))
+		for i in range(self.totalBins):
+			if mode == INTENS:
+				jacobian[i, 2*i  ] = 2*self.reals[i]
+				jacobian[i, 2*i+1] = 2*self.imags[i]
+			elif mode == PHASE:
+				re = self.reals[i]
+				im = self.imags[i]
+				if re == 0.:
+					if im > 0.:
+						jacobian[i,2*i  ] = -1./im
+					else:
+						jacobian[i,2*i  ] = 1./im
+				else:
+					common = 1. + im**2/re**2
+					jacobian[i,2*i  ] = -im/re**2/common
+					jacobian[i,2*i+1] = 1./re/common
+		retVal = np.dot(jacobian, np.dot(self.coma, np.transpose(jacobian)))
+		self.specialCOMAs[mode] = retVal
+		return retVal
+
 	def setShapeParameters(self, pars):
 		if not self.chi2init:
 			raise RuntimeError("chi2 not inited, no knowledge about shape parameters")
 		if not len(pars) == self.nPar:
-			raise ValueError("Number of shape parameters does not match")
+			raise ValueError("Number of shape parameters does not match len(pars) = " + str(len(pars)) + " != self.nPar = " + str(self.nPar))
 		countPar = 0
 		for s in range(self.nSect):
 			if not s in self.funcs:
@@ -121,58 +191,79 @@ class massBin:
 				continue
 			nFunc  = self.nFuncs[s]
 			masses = self.binCenters[self.borders[s]:self.borders[s+1]]
-			ampls  = [f(masses) for f in self.funcs[s]]
-			a,b,c  = self.getTheoryABC(s, ampls)
-			for i in range(self.nZero):
-				B[2*i  ] += b[2*i  ]
-				B[2*i+1] += b[2*i+1]
-				for j in range(self.nZero):
-					A[2*i  ,2*j  ] += a[2*i  ,2*j  ]
-					A[2*i  ,2*j+1] += a[2*i  ,2*j+1]
-					A[2*i+1,2*j  ] += a[2*i+1,2*j  ]
-					A[2*i+1,2*j+1] += a[2*i+1,2*j+1]
-				for j in range(nFunc):
-					A[2*i  ,2*(j+countNfunc)  ] += a[2*i  ,2*(self.nZero+j)  ]
-					A[2*i  ,2*(j+countNfunc)+1] += a[2*i  ,2*(self.nZero+j)+1]
-					A[2*i+1,2*(j+countNfunc)  ] += a[2*i+1,2*(self.nZero+j)  ]
-					A[2*i+1,2*(j+countNfunc)+1] += a[2*i+1,2*(self.nZero+j)+1]
+			ampls  = [f(masses, externalKinematicVariables = [self.binCenter]) for f in self.funcs[s]]
+			massRange = None
+			if self.hasMassRange:
+				if s in self.massRanges:
+					massRange = self.massRanges[s]
+			a,b,c  = self.getTheoryABC(s, ampls, massRange = massRange)
+			for i in range(len(b)):
+				if not b[i].imag == 0.:
+					raise ValueError("Complex value in b")
+				for j in range(len(b)):
+					if not a[i,j].imag == 0.:
+						raise ValueError("Complex value in a")
 
-					A[2*(j+countNfunc)  ,2*i  ] += a[2*(self.nZero+j)  ,2*i  ]
-					A[2*(j+countNfunc)  ,2*i+1] += a[2*(self.nZero+j)  ,2*i+1]
-					A[2*(j+countNfunc)+1,2*i  ] += a[2*(self.nZero+j)+1,2*i  ]
-					A[2*(j+countNfunc)+1,2*i+1] += a[2*(self.nZero+j)+1,2*i+1]
-			for i in range(nFunc):
-				B[2*(i+countNfunc)  ] += b[2*(self.nZero+i)  ]
-				B[2*(i+countNfunc)+1] += b[2*(self.nZero+i)+1]
+			for i in range(self.nZero):
+				B[2*i  ] += b[2*i  ].real
+				B[2*i+1] += b[2*i+1].real
+				for j in range(self.nZero):
+					A[2*i  ,2*j  ] += a[2*i  ,2*j  ].real
+					A[2*i  ,2*j+1] += a[2*i  ,2*j+1].real
+					A[2*i+1,2*j  ] += a[2*i+1,2*j  ].real
+					A[2*i+1,2*j+1] += a[2*i+1,2*j+1].real
 				for j in range(nFunc):
-					A[2*(i+countNfunc)  ,2*(j+countNfunc)  ] += a[2*(self.nZero+i)  ,2*(self.nZero+j)  ]
-					A[2*(i+countNfunc)  ,2*(j+countNfunc)+1] += a[2*(self.nZero+i)  ,2*(self.nZero+j)+1]
-					A[2*(i+countNfunc)+1,2*(j+countNfunc)  ] += a[2*(self.nZero+i)+1,2*(self.nZero+j)  ]
-					A[2*(i+countNfunc)+1,2*(j+countNfunc)+1] += a[2*(self.nZero+i)+1,2*(self.nZero+j)+1]
+					A[2*i  ,2*(j+countNfunc)  ] += a[2*i  ,2*(self.nZero+j)  ].real
+					A[2*i  ,2*(j+countNfunc)+1] += a[2*i  ,2*(self.nZero+j)+1].real
+					A[2*i+1,2*(j+countNfunc)  ] += a[2*i+1,2*(self.nZero+j)  ].real
+					A[2*i+1,2*(j+countNfunc)+1] += a[2*i+1,2*(self.nZero+j)+1].real
+
+					A[2*(j+countNfunc)  ,2*i  ] += a[2*(self.nZero+j)  ,2*i  ].real
+					A[2*(j+countNfunc)  ,2*i+1] += a[2*(self.nZero+j)  ,2*i+1].real
+					A[2*(j+countNfunc)+1,2*i  ] += a[2*(self.nZero+j)+1,2*i  ].real
+					A[2*(j+countNfunc)+1,2*i+1] += a[2*(self.nZero+j)+1,2*i+1].real
+			for i in range(nFunc):
+				B[2*(i+countNfunc)  ] += b[2*(self.nZero+i)  ].real
+				B[2*(i+countNfunc)+1] += b[2*(self.nZero+i)+1].real
+				for j in range(nFunc):
+					A[2*(i+countNfunc)  ,2*(j+countNfunc)  ] += a[2*(self.nZero+i)  ,2*(self.nZero+j)  ].real
+					A[2*(i+countNfunc)  ,2*(j+countNfunc)+1] += a[2*(self.nZero+i)  ,2*(self.nZero+j)+1].real
+					A[2*(i+countNfunc)+1,2*(j+countNfunc)  ] += a[2*(self.nZero+i)+1,2*(self.nZero+j)  ].real
+					A[2*(i+countNfunc)+1,2*(j+countNfunc)+1] += a[2*(self.nZero+i)+1,2*(self.nZero+j)+1].real
 			C += c			
 			countNfunc += nFunc
 		return A,B,C
 
-	def setTheory(self, sectParFunctMap = {}):
+	def setZeroTheory(self):
 		self.theo = np.zeros((self.totalBins), dtype = complex)
-		if sectParFunctMap == {}:
+
+	def setTheory(self, sectParFunctMap = {}):
+		spfm = self.toIntegerSectorMap(sectParFunctMap)
+
+		self.theo = np.zeros((self.totalBins), dtype = complex)
+		if spfm == {}:
 			print "setTheory called with no functions. Setting zero theory as dummy..."
 		for s in range(self.nSect):
-			if not s in sectParFunctMap:
+			if not s in spfm:
 				continue
 			startBin = self.borders[s  ]
 			stopBin  = self.borders[s+1]
 			binning  = self.binCenters[startBin:stopBin]
 			ampl = np.zeros((len(binning)), dtype = complex)
-			for pf in sectParFunctMap[s]:
+			for pf in spfm[s]:
 				if len(pf) == 2: # If shape paremeters of the functions are to be used
-					ampl += pf[0] * pf[1](binning)
+					ampl += pf[0] * pf[1](binning, externalKinematicVariables = [self.binCenter])
 				elif len(pf) == 3: # If shape parameters are given as third element
-					ampl += pf[0] * pf[1](binning, pf[2])
+					ampl += pf[0] * pf[1](binning, pf[2],externalKinematicVariables = [self.binCenter] )
 				else:
 					raise ValueError("Format of sectParFunctMap is wrong")
 			for i,b in enumerate(range(startBin, stopBin)):
 				self.theo[b] = ampl[i]*self.norms[b]**.5
+				if self.hasMassRange:
+					if s in self.massRanges:
+						binCenterMass = self.binCenters[b]
+						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
+							self.theo[b] = 0.+0.j
 		self.hasTheo = True
 
 	def unifyComa(self):
@@ -195,13 +286,17 @@ class massBin:
 				for j in range(dim/2):
 					transformationMatrix[2*i  ,2*j  ] -= self.zeroModes[z][i] * self.zeroModes[z][j]
 					transformationMatrix[2*i+1,2*j+1] -= self.zeroModes[z][i] * self.zeroModes[z][j]
-		self.coma    = np.dot(transformationMatrix, np.dot(self.coma, transformationMatrix))
-		self.comaInv = utils.pinv(self.coma, self.pinvNumLim)
+		self.coma         = np.dot(transformationMatrix, np.dot(self.coma, transformationMatrix))
+		self.comaInv      = utils.pinv(self.coma, self.pinvNumLim)
+		self.specialCOMAs = {}
 
-	def setTheoryFromOwnFunctions(self, parameterList):
+	def setMassRanges(self, massRanges):
+		self.massRanges   = self.toIntegerSectorMap(massRanges)
+		self.hasMassRange = True
+
+	def setTheoryFromOwnFunctions(self, parameterList, restrictToRange = True):
 		if not self.chi2init:
 			raise RuntimeError("Chi2 not inited, does not have own functions")
-
 		if not len(parameterList) == 2*self.nFunc:
 			raise ValueError("Number of parameters does not match")
 		countFunc = 0
@@ -211,15 +306,21 @@ class massBin:
 				continue
 			nFunc = self.nFuncs[s]
 			masses = self.binCenters[self.borders[s]:self.borders[s+1]]
+						
+
 			ampl = np.zeros((len(masses)), dtype = complex)
 			for i,f in enumerate(self.funcs[s]):
 				cpl = parameterList[2*(i+countFunc)] + 1.j*parameterList[2*(i+countFunc)+1]
-				ampl += cpl * f(masses)
-			for i,b in enumerate(range(self.borders[s], self.borders[s+1])):
-				self.theo[b] = ampl[i]
+				ampl += cpl * f(masses, externalKinematicVariables = [self.binCenter])
+
 			countFunc += nFunc
 			for i,b in enumerate(range(self.borders[s],self.borders[s+1])):
 				self.theo[b] = ampl[i]*self.norms[b]**.5
+				if self.hasMassRange and restrictToRange:
+					if s in self.massRanges:
+						binCenterMass = self.binCenters[b]
+						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
+							self.theo[b] = 0.+0.j
 		self.hasTheo = True
 
 	def renormZeroModes(self):
@@ -263,7 +364,7 @@ class massBin:
 		self.zeroModes.append(newMode)
 		self.nZero = len(self.zeroModes)
 
-	def getTheoryABC(self, sector, parametrizations):
+	def getTheoryABC(self, sector, parametrizations, massRange = None):
 		nPara   = len(parametrizations)
 		if sector < 0 or sector >= self.nSect:
 			raise IndexError("Sector "+str(sector)+" invalid")
@@ -277,6 +378,11 @@ class massBin:
 		ZP    = np.zeros((2*(self.nZero + nPara), 2*self.totalBins))
 		count = 0
 		for bin in range(nBinMin, nBinMax):
+			if massRange:
+				mass = self.binCenters[bin]
+				if mass < massRange[0] or mass >= massRange[1]:
+					count += 1
+					continue
 			Ampls[2*bin  ] = self.reals[bin]
 			Ampls[2*bin+1] = self.imags[bin]
 			for z in range(self.nZero):
@@ -369,7 +475,7 @@ class massBin:
 			count += 1		
 		return np.dot(deltas, np.dot(self.comaInv, deltas))
 
-	def smothnessChi2(self,other,params):
+	def smothnessChi2(self, other, params):
 		if not self.sectors == other.sectors:
 			raise ValueError("Sectors do not match")
 		Dself  = np.zeros((2*self.totalBins))
@@ -425,12 +531,25 @@ class massBin:
 				elif mode == "IMAG":
 					val = ampl.imag
 					jac[1] = 1.
+				elif mode == "PHASE":
+					val = phase(ampl)
+					if ampl.real == 0.:
+						if ampl.imag > 0.:
+							jac[0] = -1./ampl.imag
+						else:
+							jac[0] = 1./ampl.imag
+					else:
+						common = 1. + ampl.imag**2/ampl.real**2
+						jac[0] = -ampl.imag/ampl.real**2/common
+						jac[1] = 1./ampl.real/common
 				elif mode == "INTENSTHEO":
 					val = abs(self.theo[i])**2
 				elif mode == "REALTHEO":
 					val = self.theo[i].real
 				elif mode == "IMAGTHEO":
 					val = self.theo[i].imag
+				elif mode == "PHASETHEO":
+					val = phase(self.theo[i])
 				else:
 					raise ValueError("Unknown mode '" + mode + "'")
 				err = np.dot(jac, np.dot(coma,jac))**.5
@@ -454,8 +573,9 @@ class massBin:
 			jac[2*i  ,2*i+1] = - im
 			jac[2*i+1,2*i  ] =   im
 			jac[2*i+1,2*i+1] =   re
-		self.coma    = np.dot(jac, np.dot(self.coma,np.transpose(jac)))
-		self.comaInv = utils.pinv(self.coma, self.pinvNumLim) # the covariance matrix used is already inverted
+		self.coma         = np.dot(jac, np.dot(self.coma,np.transpose(jac)))
+		self.comaInv      = utils.pinv(self.coma, self.pinvNumLim) # the covariance matrix used is already inverted
+		self.specialCOMAs = {}
 
 	def comaIsSymmetric(self):
 		for i in range(2*self.totalBins):
@@ -464,3 +584,28 @@ class massBin:
 					print i,j,self.coma[i,j],self.coma[j,i]
 					return False
 		return True
+
+	def toIntegerSectorMap(self, mapp):
+		if mapp == {}:
+			return {}
+		isInt = False
+		isStr = False
+		for key in mapp:
+			if isinstance(key, int):
+				isInt = True
+			if isinstance(key,str):
+				isStr = True
+		if isInt and isStr:
+			raise ValueError("Cannot handle both string and integer keys")
+		elif isInt:
+			return mapp
+		elif isStr:
+			newMapp = {}
+			for s, sector in enumerate(self.sectors):
+				if sector in mapp:
+					newMapp[s] = mapp[sector]
+			return newMapp
+		else:
+			raise ValueError("Something wrong with the mapp")
+
+

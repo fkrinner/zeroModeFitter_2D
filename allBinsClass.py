@@ -47,6 +47,10 @@ class allBins:
 		for mb in self.massBins:
 			mb.renormZeroModes()
 
+	def setMassRanges(self, massRanges):
+		for mb in self.massBins:
+			mb.setMassRanges(massRanges)
+
 	def nZero(self):
 		nZero = 0
                 for mb in self.massBins:
@@ -72,7 +76,7 @@ class allBins:
 						spfm[s].append([p,f,shapePars])
 			mb.setTheory(spfm)
 
-	def setTheoryFromOwnFunctions(self, parameterLists, skipZeroPars = True):
+	def setTheoryFromOwnFunctions(self, parameterLists, skipZeroPars = True, restrictToRange = True):
 		if not self.chi2init:
 			raise RuntimeError("Chi2 not inited, cannot set theory")
 		if not len(parameterLists) == len(self.massBins):
@@ -80,9 +84,9 @@ class allBins:
 		for i,mb in enumerate(self.massBins):
 			if skipZeroPars:
 				nZ = mb.nZero
-				mb.setTheoryFromOwnFunctions(parameterLists[i][2*nZ:])
+				mb.setTheoryFromOwnFunctions(parameterLists[i][2*nZ:], restrictToRange = restrictToRange)
 			else:
-				mb.setTHeoryFromOwnFunctions(parameterLists[i])
+				mb.setTHeoryFromOwnFunctions(parameterLists[i], restrictToRange = restrictToRange)
 
 	def linearizeZeroModeParameters(self, pars):
 		if not len(pars) == len(self.massBins):
