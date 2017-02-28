@@ -13,41 +13,34 @@ import scipy.optimize
 from removeZeroModes import removeCertainZeroModes
 from fixedparameterizationPaths import getFileNameForSector
 
-def main(rhoFileName = ""):
-#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
-#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_3pp.root"
-#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_bigger2pp.root"
-	inFileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/ppppppppp/DpPiPiPi.root"
-#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_4pp.root"
-	sectors = ["Dp[pi,pi]0++PiS","Dp[pi,pi]1--PiP"]
-#	sectors = ["Dp[pi,pi]0++PiS","Dp[pi,pi]2++PiD"]
-#	sectors = ["Dp[pi,pi]1--PiP","Dp[pi,pi]2++PiD"]
-#	sectors = ["Dp[pi,pi]0++PiS","Dp[pi,pi]1--PiP","Dp[pi,pi]2++PiD"]
-#	sectors = ["1++0+[pi,pi]0++PiP","1++0+[pi,pi]1--PiS"]
-#	sectors = ["2-+0+[pi,pi]0++PiD","2-+0+[pi,pi]1--PiP","2-+0+[pi,pi]1--PiF","2-+0+[pi,pi]2++PiS"]
-#	sectors = ["2-+0+[pi,pi]1--PiP"]
-#	sectors = ["1-+1+[pi,pi]1--PiP"]
-#	sectors = ["1++0+[pi,pi]0++PiP"]
-#	sectors = ["2++1+[pi,pi]1--PiD"]
-#	sectors = ["0-+0+[pi,pi]1--PiP"]
-#	sectors = ["2-+0+[pi,pi]2++PiS"]
-#	sectors = ["2-+1+[pi,pi]1--PiP"]
-#	sectors = ["1++0+[pi,pi]1--PiS","1++0+[pi,pi]0++PiP"]
-#	sectors = ["1++1+[pi,pi]1--PiS"]
-#	sectors = ["1++0+[pi,pi]1--PiS"]
-#	sectors = ["3++0+[pi,pi]3--PiS"]
-#	sectors = ["3++0+[pi,pi]2++PiP"]
-#	sectors = ["3++0+[pi,pi]1--PiD"]
-#	sectors = ["3++0+[pi,pi]3--PiS","3++0+[pi,pi]2++PiP","3++0+[pi,pi]1--PiD"]
-#	sectors = ["4++1+[pi,pi]1--PiG", "4++1+[pi,pi]2++PiF"]
-#	sectors = ["2++1+[pi,pi]1--PiD","2++1+[pi,pi]2++PiP"]
+def main():
+	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
+#	sectors    = ["1++0+[pi,pi]0++PiP","1++0+[pi,pi]1--PiS"]
+#	sectors    = ["2-+0+[pi,pi]0++PiD","2-+0+[pi,pi]1--PiP","2-+0+[pi,pi]1--PiF","2-+0+[pi,pi]2++PiS"]
+#	sectors    = ["2-+0+[pi,pi]1--PiP"]
+#	sectors    = ["1-+1+[pi,pi]1--PiP"]
+#	sectors    = ["1++0+[pi,pi]0++PiP"]
+#	sectors    = ["2++1+[pi,pi]1--PiD"]
+	sectors    = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
+#	sectors    = ["0-+0+[pi,pi]1--PiP"]
+#	sectors    = ["0-+0+[pi,pi]0++PiS"]
+#	sectors    = ["2-+0+[pi,pi]2++PiS"]
+#	sectors    = ["2-+1+[pi,pi]1--PiP"]
+#	sectors    = ["1++0+[pi,pi]1--PiS","1++0+[pi,pi]0++PiP"]
+#	sectors    = ["1++1+[pi,pi]1--PiS"]
+#	sectors    = ["1++0+[pi,pi]1--PiS"]
+#	sectors    = ["3++0+[pi,pi]3--PiS"]
+#	sectors    = ["3++0+[pi,pi]2++PiP"]
+#	sectors    = ["3++0+[pi,pi]1--PiD"]
+#	sectors    = ["3++0+[pi,pi]3--PiS","3++0+[pi,pi]2++PiP","3++0+[pi,pi]1--PiD"]
+#	sectors    = ["4++1+[pi,pi]1--PiG", "4++1+[pi,pi]2++PiF"]
+#	sectors    = ["2++1+[pi,pi]1--PiD","2++1+[pi,pi]2++PiP"]
 
-#	sectors = [sectors[1]]
+#	sectors    = [sectors[1]]
 
 	doSpecialOneBinFit = -15 # negative values turn it off
-
-	sectorUseMap = { # Defines, if for the given sector a theory curve will be used
-		"0-+0+[pi,pi]0++PiS" : True,
+	sectorUseMap       = { # Defines, if for the given sector a theory curve will be used
+		"0-+0+[pi,pi]0++PiS" : False,
 		"0-+0+[pi,pi]1--PiP" : True,
 		"1++0+[pi,pi]0++PiP" : True, 
 		"1++0+[pi,pi]1--PiS" : True, 
@@ -58,23 +51,81 @@ def main(rhoFileName = ""):
 	}
 
 	sectorRangeMap = {}
-	for sector in sectors:
-		if '1--' in sector:
-			pass
-#			sectorRangeMap[sector] = (0.55,1.00)
+	outFileName    = "resultFilesConsistency/out"
+	modeDef        = False
+	special        = False
+	useSmooth      = False
+	fitShape       = True
+	for i in range(1,len(sys.argv)):
+		arg = sys.argv[i]
+		if arg.startswith('t:'):
+			tBin = int(arg[2:])
+			if tBin < 0 or tBin > 3:
+				raise ValueError("Invalid t' bin: '" +str(tBin)+"'")
+			outFileName += "_t"+str(tBin)
+		elif arg.startswith('b:'):
+			chunks = arg.split(':')
+			startBin = int(chunks[1])
+			if len(chunks) > 2:
+				stopBin = int(chunks[2])
+			else:
+				stopBin = startBin +1
+			if startBin < 0 or stopBin < 1 or startBin > 49 or stopBin > 50:
+				raise ValueError("Invalid m bins: '" + str(startBin) + "' and '" + str(stopBin) + "'")
+			outFileName += "_m"+str(startBin)+'-'+str(stopBin)
+		elif arg.startswith("u:"):
+			use = [int(c) for c in arg.split(':')[1:]]
+			outFileName += "_u"
+			for i, s in enumerate(sectors):
+				if i in use:
+					sectorUseMap[s] = True
+					outFileName += str(i)
+				else:
+					sectorUseMap[s] = False
+		elif arg.startswith("r:"):
+			chunks = arg.split(":")[1:]
+			if not len(chunks)%3 == 0:
+				raise ValueError("Range definitions invalid")
+			for i in range(len(chunks)/3):
+				i    = int(chunks[3*i])
+				mMin = float(chunks[3*i+1])
+				mMax = float(chunks[3*i+2])
+				outFileName += "_r"+str(i)+"-"+str(mMin)+"-"+str(mMax)
+				sectorRangeMap[sectors[i]] = (mMin, mMax)
+		elif arg == '-f':
+			if modeDef:
+				raise RuntimeError("Mode already defined")
+			outFileName += "_fixedShapes"
+			modelMode    = "fixedShapes"
+			modeDef      = True
+		elif arg == '-bw':
+			if modeDef:
+				raise RuntimeError("Mode already defined")
+			outFileName += "_BW"
+			modelMode    = "BW"			
+			modeDef      = True
+		elif arg =='-S':
+			if modeDef:
+				raise RuntimeError("Mode already defined")
+			outFileName += "_smooth"
+			useSmooth    = True
+			modeDef      = True
+		elif arg == "-P":
+			special = True
+			if not stopBin - startBin == 1:
+				raise ValueError("Phase fit only possible for a single bin")
+			outFileName += "_phase"
+		else:
+			raise ValueError("Unknown argument: '" + arg + "'")
 
-	tBin             = 0
-	startBin         = 34
-	stopBin          = 35
-#	startBin         = 15
-#	stopBin          = 50
-	polynomialDegree = 1
-#	modelMode        = "fixedShapes"
-	modelMode        = "simpleBW_Dp"
-#	modelMode        = "BW"
-#	modelMode        = "explicitRhoFile"
-	useSmooth        = False
-	fitShape         = False
+	automatic = len(sys.argv) > 1
+	if automatic:
+		print outFileName
+	else:
+		modelMode = ""
+		tBin      = 0
+		startBin  = 31
+		stopBin   = 32
 
 	if modelMode == "BW" or modelMode == "2BW":
 #		rho = pc.breitWigner()
@@ -97,18 +148,9 @@ def main(rhoFileName = ""):
 			if "3--" in sector:
 				waveModel[sector] = rhoModel
 
-	elif modelMode == "simpleBW_Dp":
-		f0  = pc.breitWigner()
-		f0.setParameters([.98, .1])
-		rho = pc.breitWigner()
-		rho.setParameters([ .77, .16])
-		f2 = pc.breitWigner()
-		f2.setParameters([1.27, .2 ])
-		waveModel = {"Dp[pi,pi]0++PiS" : [f0], "Dp[pi,pi]1--PiP" : [rho], "Dp[pi,pi]2++PiD" : [f2]}
-
 	elif modelMode == "fixedShapes":
 		useBF       = False
-		merge0pp    = True
+		merge0pp    = False
 		polyDegree  = 0
 		polyComplex = True
 		waveModel   = {}
@@ -129,20 +171,6 @@ def main(rhoFileName = ""):
 				param = pc.fixedParameterization(fn, polynomialDegree  = polyDegree, complexPolynomial = polyComplex)
 				model.append(param)
 			waveModel[sector] = model
-#		for sector in sectors: # Ovveride with free rho parameterization
-#			if '1--' in sector:
-#				rho = pc.rpwaBreitWignerInt(0.13957018,0.13957018,0.13957018,1,0) # Override here
-#				rho.setParameters([.77549, .1491])
-#				waveModel[sector] = [rho]
-
-	elif modelMode == "explicitRhoFile":
-		if not os.path.isfile(rhoFileName):
-			raise IOError("Rho file does not exist")
-		param   = pc.fixedParameterization(rhoFileName, polynomialDegree  = 0, complexPolynomial = False)
-		waveModel = {}
-		for sector in sectors:
-			if '1--' in sector:
-				waveModel[sector] = [param]
 
 	with root_open(inFileName, "READ") as inFile:
 		histNames = GetKeyNames(inFile)
@@ -213,22 +241,25 @@ def main(rhoFileName = ""):
 
 #		ab.unifyComa()
 
-		special = False
-
 		if special:
-			for mb in ab.massBins:
-				mb.setZeroTheory()
 			from random import random
-			ab.initChi2(waveModel)
-			nBin = 25
-			leBin = ab.massBins[nBin - startBin]
-			pars  = [random() for _ in range(leBin.nParAll())]
-			print leBin.phaseChi2(pars)
-			res = scipy.optimize.minimize(leBin.phaseChi2, pars)
-			print "phaseFit gives for bin",nBin 
-			print "Giving a Chi2 of:",res.fun
-			paramsZ = [res.x[0], res.x[1]] * 100 # Very, very bad hack...
-	
+			ab.setMassRanges(sectorRangeMap)
+#			with open(outFileName, 'w') as out:
+			if True:
+				for mb in ab.massBins:
+					mb.setZeroTheory()
+				ab.initChi2(waveModel)
+				for i,nBin in enumerate(range(startBin, stopBin)):
+					print "at bin", nBin
+					leBin = ab.massBins[i]
+					pars  = [random() for _ in range(leBin.nParAll())]
+					print leBin.phaseChi2(pars)
+					res = scipy.optimize.minimize(leBin.phaseChi2, pars)
+					print "phaseFit for bin",nBin 
+					print "Giving a Chi2 of:",res.fun
+				paramsZ = [res.x[0], res.x[1]] * 100 # Very, very bad hack...
+#			sys.exit(0)	
+
 		if doSpecialOneBinFit >= 0:
 			specialBin = ab.massBins[doSpecialOneBinFit]
 			specialBin.initChi2(waveModel)
@@ -244,7 +275,7 @@ def main(rhoFileName = ""):
 
 			sys.exit(0)
 
-		if not useSmooth and not special:
+		if not useSmooth and not special and automatic:
 			ab.initChi2(waveModel)
 			ab.setMassRanges(sectorRangeMap)
 			totalPars = []
@@ -262,12 +293,31 @@ def main(rhoFileName = ""):
 					print "function parameters",f.getParameters()
 			chi2, params = ab.chi2(returnParameters = True)
 			paramsZ      = ab.linearizeZeroModeParameters(params)
+			print params
+#			with open(outFileName, 'w') as out:
+#				for i, b in enumerate(range(startBin, stopBin)):
+#					out.write(str(b) + ' ' + str(paramsZ[2*i]) + ' ' + str(paramsZ[2*i+1]) + '\n')
+#			print ab.massBins[0].phaseChi2(params[0])
+# # ### ### ### ### ### ### ### 						#
+# # It seems, that the phase fit is "not so good", since the COMA does something#
+# # weird. The \deltas for the normal fit result fed into phaseChi2() are a 	#
+# # factor 4 smaller, but after the COMA, the Chi2 is bigger than the one of the#
+# # Phase fit									#
+# # ### ### ### ### ### ### ### 						#
+#			sys.exit(0)
+		
 			ab.setTheoryFromOwnFunctions(params, True)
 			print "The final chi2 =",chi2
-		elif not special:
+		elif not special and automatic:
 			A,B,C   =  ab.getSmoothnessABC()
 			paramsZ = -np.dot(la.inv(A + np.transpose(A)), B)
-
+			with open(outFileName, 'w') as out:
+				for i, b in enumerate(range(startBin, stopBin)):
+					out.write(str(b) + ' ' + str(paramsZ[2*i]) + ' ' + str(paramsZ[2*i+1]) + '\n')
+#			sys.exit(0)
+		if not automatic:
+			print "Automatic override"
+			paramsZ = [0.] * 200
 		intenses = []
 		reals    = []
 		imags    = []
@@ -340,7 +390,7 @@ def main(rhoFileName = ""):
                 ab.fillHistograms(zeroP, imagsD,  mode = IMAG )
                 ab.fillHistograms(zeroP, phasesD, mode = PHASE)
 
-		if not useSmooth:
+		if not useSmooth and automatic:
 			ab.fillHistograms(zeroP, intensT,  mode = INTENSTHEO)
 			ab.fillHistograms(zeroP, realsT,   mode = REALTHEO  )
         	        ab.fillHistograms(zeroP, imagsT,   mode = IMAGTHEO  )
@@ -365,10 +415,14 @@ def main(rhoFileName = ""):
 						break
 				if not allIsZero:
 					break # # # # # # # # # # # # # # # # # 
-			if not allIsZero:
-				rv = resultViewer([intenses[i], intensD[i], intensT[i]],[reals[i], realsD[i], realsT[i]],[imags[i], imagsD[i], imagsT[i]], [phases[i], phasesD[i], phasesT[i]])
+			if automatic:
+				startCommand = "wq:"+outFileName+"_sector"+str(i)
 			else:
-				rv = resultViewer([intenses[i], intensD[i]],[reals[i], realsD[i]],[imags[i], imagsD[i]],[phases[i], phasesD[i]])
+				startCommand = ""
+			if not allIsZero:
+				rv = resultViewer([intenses[i], intensD[i], intensT[i]],[reals[i], realsD[i], realsT[i]],[imags[i], imagsD[i], imagsT[i]], [phases[i], phasesD[i], phasesT[i]], startBin = startBin, startCommand = startCommand)
+			else:
+				rv = resultViewer([intenses[i], intensD[i]],[reals[i], realsD[i]],[imags[i], imagsD[i]],[phases[i], phasesD[i]], startBin = startBin, startCommand = startCommand)
 			rv.run()
 
 if __name__ == "__main__":

@@ -58,6 +58,8 @@ def getStdCmd():
 	print "21P: 2mp1mmP"
 	print "21F: 2mp1mmF"
 	print "22 : 2mp2pp"
+	print "------------"
+	print "f  : Folder" 
 	mode = raw_input()
 	if mode == '00':
 		return ["", "./results/0mp0ppIntens.pdf", ["./results/0mp0pp_only0pp.intens", "./results/0mp0pp_only1mm.intens"], 
@@ -83,9 +85,21 @@ def getStdCmd():
 	if mode == "22":
 		return ["", "./results/2mp2ppIntens.pdf", ["./results/2mp2pp_only0pp.intens","./results/2mp2pp_only1mmP.intens","./results/2mp2pp_only1mmF.intens","./results/2mp2pp_only2pp.intens"], 
 		            "./results/2mp2ppArgand.pdf", ["./results/2mp2pp_only0pp.argand","./results/2mp2pp_only1mmP.argand","./results/2mp2pp_only1mmF.argand","./results/2mp2pp_only2pp.argand"]]
+	if mode == 'f':
+		folder   = raw_input("Folder:")
+		suffix   = raw_input("Suffix:")
+		intenses = []
+		argands  = []
+		for fn in os.listdir(folder):
+			ffn = folder + os.sep + fn
+			if fn.endswith(suffix+".intens"):
+				intenses.append(ffn)
+			if fn.endswith(suffix+".argand"):
+				argands.append(ffn)			
+		return ["", "intens_"+folder+suffix+".pdf", intenses, "argands_"+folder+suffix+".pdf", argands]
 
 class resultViewer:
-	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 25):
+	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 34, startCommand = ""):
 		self.nHists       = len(intensHists)
 		if self.nHists < 1:
 			raise ValueError("No histograms given")
@@ -99,14 +113,6 @@ class resultViewer:
 		self.phaseHists   = phaseHists
 		if not len(self.realHists) ==self. nHists or not len(self.imagHists) == self.nHists or not len(self.phaseHists) == self.nHists:
 			raise ValueError("Size of histograms does not match")
-		self.intensCanvas = pyRootPwa.ROOT.TCanvas("Intensity","Intensity")
-		self.sliceCanvas  = pyRootPwa.ROOT.TCanvas("IntensitySlice","IntensitySlice")
-		self.argandCanvas = pyRootPwa.ROOT.TCanvas("Argand"        ,"Argand"        )
-		self.phaseCanvas  = pyRootPwa.ROOT.TCanvas("Phase"        ,"Phase"        )
-		self.intensCanvas.SetWindowSize(500,500)
-		self.sliceCanvas.SetWindowSize( 500,500)
-		self.argandCanvas.SetWindowSize(500,500)
-		self.phaseCanvas.SetWindowSize(500,500)
 
 		self.corrColor = modernplotting.colors.colorScheme.blue
 		self.theoColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, .5)
@@ -118,7 +124,27 @@ class resultViewer:
 		self.plotData  = True
 
 		self.mMin = 0.27
-		self.mMax = 1.36
+		self.mMax = 1.94
+
+		self.noRun = False
+		if not startCommand == "":
+			if startCommand.startswith("wq:"):
+				fileName = startCommand[3:]
+				self.writeAmplFiles(self.bin, fileName = fileName)
+				self.noRun = True
+			else:
+				raise "Unknwon command '" + startCommand + "'" 
+			
+		if not  self.noRun:
+			self.intensCanvas = pyRootPwa.ROOT.TCanvas("Intensity","Intensity")
+			self.sliceCanvas  = pyRootPwa.ROOT.TCanvas("IntensitySlice","IntensitySlice")
+			self.argandCanvas = pyRootPwa.ROOT.TCanvas("Argand"        ,"Argand"        )
+			self.phaseCanvas  = pyRootPwa.ROOT.TCanvas("Phase"        ,"Phase"        )
+			self.intensCanvas.SetWindowSize(500,500)
+			self.sliceCanvas.SetWindowSize( 500,500)
+			self.argandCanvas.SetWindowSize(500,500)
+			self.phaseCanvas.SetWindowSize(500,500)
+
 
 	def getArgand(self, nBin, index = 0):
 		if index >= self.nHists:
@@ -205,6 +231,8 @@ class resultViewer:
 
 	def run(self):
 		while True:
+			if self.noRun:
+				break
 			self.drawBin(self.bin)
 			cmd = getch()
 			if cmd == 'q':
@@ -242,8 +270,11 @@ class resultViewer:
 		except:
 			print "Could not execute '" + command + "'"
 
-	def writeAmplFiles(self, nBin, index = 0):
-		name = raw_input("outputFileName:")
+	def writeAmplFiles(self, nBin, index = 0, fileName = ""):
+		if fileName == "":
+			name = raw_input("outputFileName:")
+		else:
+			name = fileName
 		if name == "":
 			print "no name given"
 			return

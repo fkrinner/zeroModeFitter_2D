@@ -1,11 +1,26 @@
 class INTENS:
-	pass
+	IS_THEO = False
+
+class INTENSNORM:
+	IS_THEO = False
 
 class PHASE:
-	pass
+	IS_THEO = False
 
 class REAL:
-	pass
+	IS_THEO = False
 
 class IMAG:
-	pass
+	IS_THEO = False
+
+class INTENSTHEO:
+	IS_THEO = True
+
+class REALTHEO:
+	IS_THEO = True
+
+class IMAGTHEO:
+	IS_THEO = True
+
+class PHASETHEO:
+	IS_THEO = True

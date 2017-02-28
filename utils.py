@@ -3,6 +3,23 @@ import numpy.linalg as la
 
 numLim = 1.E-10
 
+def getNDp(sector):
+	nDpfile = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/ppppppppp/build/nDp.dat"
+	ns = []
+	with open(nDpfile, 'r') as inin:
+		for line in inin.readlines():
+			ns += [int(chunk) for chunk in line.split()]
+	if not len(ns) == 3:
+		raise IOError("Dit not get exactly 3 values")
+	if "0++" in sector:
+		return ns[0]
+	elif "1--" in sector:
+		return ns[1]
+	elif "2++" in sector:
+		return ns[2]
+	else:
+		raise ValueError("Unknown sector '" + sector + "'")	
+
 nF0   = 62
 nRho  = 56
 nF2   = 56
@@ -21,7 +38,9 @@ def getZeroHistSectors(hist):
 	return  hist.GetTitle().split("<|sec++>")[0].split("<|>")
 
 def getNforSector(sector):
-	if "[pi,pi]0++" in sector:
+	if "Dp" in sector:
+		return getNDp(sector)
+	elif "[pi,pi]0++" in sector:
 		return nF0
 	elif "[pi,pi]1--" in sector:
 		return nRho
@@ -62,3 +81,41 @@ def isValidPhaseSpace(m3pi, m2pi, mPi = 0.139):
 	if m3pi >= m2pi + mPi:
 		return True
 	return False
+
+def LtoInt(L):
+	if L == 'S':
+		return 0
+	if L == 'P':
+		return 1
+	if L == 'D':
+		return 2
+	if L == 'F':
+		return 3
+	if L == 'G':
+		return 4
+
+def getOnePhaseDirection(ampl):
+	return (-ampl.imag, ampl.real)
+
+def normVector(vector):
+	dim  = len(vector)
+	norm = 0.
+	for v in vector:
+		norm += v**2
+	norm**=.5
+	for i in range(dim):
+		vector[i] /= norm
+	return vector
+
+def getPhaseDirection(ampls):
+	dim = len(ampls)
+	if dim%2 != 0:
+		raise ValueError("Odd number of values... Error, cannot determine phase-direction")
+	retVal = np.zeros(dim)
+	for i in range(dim/2):
+		pd     = getOnePhaseDirection(ampls[2*i] + 1.j * ampls[2*i+1])
+		retVal[2*i  ] = pd[0]
+		retVal[2*i+1] = pd[1]
+	return normVector(retVal)
+
+

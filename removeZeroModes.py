@@ -9,7 +9,7 @@ def removeCertainZeroModes(zeroHists, eigenvalues):
 		return
 	if not len(eigenvalues) == len(zeroHists):
 		raise ValueError("removeCertainZeroModes(...): Sizes do not match")
-	removeAllButOne2mpModes(zeroHists, eigenvalues)
+#	removeAllButOne2mpModes(zeroHists, eigenvalues)
 #	setExplicitelyToZero(zeroHists, ['zero2_0']) # in the MC results, 'zero3_0', 'zero2_0' and 'zero4_0' are 2mp zero-modes
 
 def removeAllButOne2mpModes(zeroHists, eigenvalues):

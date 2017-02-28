@@ -4,7 +4,7 @@ import numpy.linalg as la
 import utils
 from utils import getZeroHistSectors
 from cmath import phase, pi
-from modes import INTENS, PHASE
+from modes import INTENS, PHASE, REAL, IMAG, INTENSNORM, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO
 
 class massBin:
 	def __init__(self, nBin, realHists, imagHists, normHists, indexHists, coma):
@@ -39,7 +39,7 @@ class massBin:
 		self.norms      = np.zeros((self.totalBins))
 		self.coma       = np.zeros((2*self.totalBins,2*self.totalBins))
 		self.binCenters = np.zeros((self.totalBins))
-		self.pinvNumLim = 1.e-12
+		self.numLim     = 1.e-11
 		count = 0
 		for s in range(self.nSect):
 			for bin in range(self.nBins[s]):
@@ -58,7 +58,7 @@ class massBin:
 						self.coma[2*count+1, 2*count2+1] = coma.GetBinContent(2*comaIndex+2, 2*comaIndex2+2)
 						count2 += 1
 				count +=1
-		self.comaInv = utils.pinv(self.coma, self.pinvNumLim) # the covariance matrix used is already inverted
+		self.comaInv = utils.pinv(self.coma, self.numLim) # the covariance matrix used is already inverted
 		self.borders = [0]
 		for i in range(self.nSect):
 			self.borders.append(self.borders[-1] + self.nBins[i])
@@ -112,10 +112,11 @@ class massBin:
 		if not self.chi2init:
 			raise RuntimeError("chi2 not inited, cannot evaluate")
 		if not len(pars) == self.nParAll():
-			raise ValueError("Number of parameters does not match")
+			raise ValueError("Number of parameters does not match "+ str(len(pars)) + " vs " + str(self.nParAll()))
 		corrAmpl = self.getCorrectedAmplitudes(pars[:2*self.nZero])
-		self.setTheoryFromOwnFunctions(pars[2*self.nZero:2*(self.nZero + self.nFunc)])
 		self.setShapeParameters(pars[2*(self.nZero + self.nFunc):])
+		self.setTheoryFromOwnFunctions(pars[2*self.nZero:2*(self.nZero + self.nFunc)])
+
 		deltas = np.zeros((self.totalBins))
 		for s in range(self.nSect):
 			if not s in self.funcs:
@@ -123,12 +124,13 @@ class massBin:
 			startBin = self.borders[s  ]
 			stopBin  = self.borders[s+1]
 			for bin in range(startBin, stopBin):
-				if self.hasMassRange and restrictToRange:
+				if self.hasMassRange:
 					if s in self.massRanges:
 						binCenterMass = self.binCenters[bin]
 						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
 							continue
 				if mode == PHASE:
+#					print phase(self.theo[bin])
 					deltas[bin] = phase(corrAmpl[2*bin] + 1.j*corrAmpl[2*bin+1]) - phase(self.theo[bin])
 					if deltas[bin] > pi:
 						deltas[bin] -= 2*pi
@@ -136,9 +138,19 @@ class massBin:
 						deltas[bin] += 2*pi
 				elif mode == INTENS:
 					deltas[bin] = corrAmpl[2*bin]**2 + corrAmpl[2*bin+1]**2 - abs(self.theo[bin])**2
-		coma = utils.pinv(self.getSpecialComa(mode), self.pinvNumLim)
+
+
+		coma = utils.pinv(self.getSpecialComa(mode), self.numLim)
 		retVal = np.dot(deltas, np.dot(coma, deltas))
-		print "Call",retVal
+
+		removePhaseDirection = True
+		if removePhaseDirection:
+			entry          = (1./len(deltas))**.5 # The direction of a global phase rotation is (1., 1., 1., 1., ...) / len(deltas)**.5
+			sp             = 0.
+			for i in range(len(deltas)):
+				sp += entry * deltas[i]
+			retVal += sp**2*retVal
+
 		return retVal
 
 	def getSpecialComa(self, mode = PHASE):
@@ -175,8 +187,29 @@ class massBin:
 			if not s in self.funcs:
 				continue
 			for f in self.funcs[s]:
-				f.parameters = pars[countPar:countPar + f.nPar]
+				f.setParameters(pars[countPar:countPar + f.nPar])
 				countPar += f.nPar
+
+	def setParametersAndErrors(self, pars, errors):
+		if not self.chi2init:
+			print "chi2 not inited, no knowledge about shape parameters"
+			return False
+		if not len(errors) == self.nPar:
+			print "Number of parameter errors does not match len(errors) = " + str(len(errors)) + " != self.nPar = " + str(self.nPar)
+			return False
+		if not len(pars) == self.nPar:
+			print "Number of shape parameters does not match len(pars) = " + str(len(pars)) + " != self.nPar = " + str(self.nPar)
+			return False
+		countPar = 0
+		for s in range(self.nSect):
+			if not s in self.funcs:
+				continue
+			for f in self.funcs[s]:
+				if not f.setParametersAndErrors(pars[countPar:countPar + f.nPar], errors[countPar:countPar + f.nPar]):
+					print "Could not set parameter in function"
+					return False
+				countPar += f.nPar
+		return True
 
 	def getOwnTheoryABC(self):
 		if not self.chi2init:
@@ -199,11 +232,16 @@ class massBin:
 			a,b,c  = self.getTheoryABC(s, ampls, massRange = massRange)
 			for i in range(len(b)):
 				if not b[i].imag == 0.:
-					raise ValueError("Complex value in b")
+					if abs(b[i].imag) > self.numLim:
+						raise ValueError("Complex value in b " + str(b[i]))
+					else:
+						b[i] = b[i].real
 				for j in range(len(b)):
 					if not a[i,j].imag == 0.:
-						raise ValueError("Complex value in a")
-
+						if abs(a[i,j].imag) > self.numLim:
+							raise ValueError("Complex value in a " + str(a[i,j]))
+						else:
+							a[i,j] = a[i,j].real
 			for i in range(self.nZero):
 				B[2*i  ] += b[2*i  ].real
 				B[2*i+1] += b[2*i+1].real
@@ -287,7 +325,7 @@ class massBin:
 					transformationMatrix[2*i  ,2*j  ] -= self.zeroModes[z][i] * self.zeroModes[z][j]
 					transformationMatrix[2*i+1,2*j+1] -= self.zeroModes[z][i] * self.zeroModes[z][j]
 		self.coma         = np.dot(transformationMatrix, np.dot(self.coma, transformationMatrix))
-		self.comaInv      = utils.pinv(self.coma, self.pinvNumLim)
+		self.comaInv      = utils.pinv(self.coma, self.numLim)
 		self.specialCOMAs = {}
 
 	def setMassRanges(self, massRanges):
@@ -329,9 +367,9 @@ class massBin:
 				self.zeroModes[z][i] *= self.norms[i]**.5
 
 	def addZeroMode(self, modeBorders, modeHist, eigenvalueHist = None):
-		newMode = np.zeros((self.totalBins))
+		newMode  = np.zeros((self.totalBins))
 		modeList = getZeroHistSectors(modeHist)
-		modeMap = {}
+		modeMap  = {}
 		if not eigenvalueHist == None:
 			if not len(self.zeroModes) == len(self.zeroEigenvalues):
 				print "ERROR: Eigenvalue hist given, but sizes of values and vectors do not match"
@@ -499,7 +537,7 @@ class massBin:
 		return Cself + Cother
 
 	def fillHistograms(self, params, hists, mode = "INTENS"):
-		if "THEO" in mode and not self.hasTheo:
+		if mode.IS_THEO and not self.hasTheo:
 			print "No theory loaded, cannot fill histogram"
 		if not len(hists) == self.nSect:
 			raise IndexError("Histogram number mismatch")
@@ -517,21 +555,21 @@ class massBin:
 				coma[0,1] = self.coma[2*i  ,2*i+1]
 				coma[1,0] = self.coma[2*i+1,2*i  ]
 				coma[1,1] = self.coma[2*i+1,2*i+1]
-				if mode == "INTENS":
+				if mode == INTENS:
 					val = abs(ampl)**2
 					jac[0] = 2*ampl.real
 					jac[1] = 2*ampl.imag
-				elif mode == "INTENSNORM":
+				elif mode == INTENSNORM:
 					val = abs(ampl)**2/norm
 					jac[0] = 2*ampl.real/norm
 					jac[1] = 2*ampl.imag/norm
-				elif mode == "REAL":
+				elif mode == REAL:
 					val = ampl.real
 					jac[0] = 1.
-				elif mode == "IMAG":
+				elif mode == IMAG:
 					val = ampl.imag
 					jac[1] = 1.
-				elif mode == "PHASE":
+				elif mode == PHASE:
 					val = phase(ampl)
 					if ampl.real == 0.:
 						if ampl.imag > 0.:
@@ -542,13 +580,13 @@ class massBin:
 						common = 1. + ampl.imag**2/ampl.real**2
 						jac[0] = -ampl.imag/ampl.real**2/common
 						jac[1] = 1./ampl.real/common
-				elif mode == "INTENSTHEO":
+				elif mode == INTENSTHEO:
 					val = abs(self.theo[i])**2
-				elif mode == "REALTHEO":
+				elif mode == REALTHEO:
 					val = self.theo[i].real
-				elif mode == "IMAGTHEO":
+				elif mode == IMAGTHEO:
 					val = self.theo[i].imag
-				elif mode == "PHASETHEO":
+				elif mode == PHASETHEO:
 					val = phase(self.theo[i])
 				else:
 					raise ValueError("Unknown mode '" + mode + "'")
@@ -574,7 +612,7 @@ class massBin:
 			jac[2*i+1,2*i  ] =   im
 			jac[2*i+1,2*i+1] =   re
 		self.coma         = np.dot(jac, np.dot(self.coma,np.transpose(jac)))
-		self.comaInv      = utils.pinv(self.coma, self.pinvNumLim) # the covariance matrix used is already inverted
+		self.comaInv      = utils.pinv(self.coma, self.numLim) # the covariance matrix used is already inverted
 		self.specialCOMAs = {}
 
 	def comaIsSymmetric(self):

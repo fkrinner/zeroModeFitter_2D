@@ -2,29 +2,42 @@ import os
 
 mapp = {
 	"0-+0+[pi,pi]0++PiS" : ["amp_0mp0pf0980PiS","amp_0mp0pSigmaPiS","amp_0mp0pf01500PiS"],
-	"0-+0+[pi,pi]1--PiP" : ["amp_0mp0pRhoPiP"],
+	"0-+0+[pi,pi]1--PiP" : ["amp_0mp0pRhoPiP" ],
 	"1++0+[pi,pi]0++PiP" : ["amp_1pp0pf0980PiP","amp_1pp0pSigmaPiP"],
-	"1++0+[pi,pi]1--PiS" : ["amp_1pp0pRhoPiS"],
-	"1++1+[pi,pi]1--PiS" : ["amp_1pp1pRhoPiS"],
+	"1++0+[pi,pi]1--PiS" : ["amp_1pp0pRhoPiS" ],
+	"1++1+[pi,pi]1--PiS" : ["amp_1pp1pRhoPiS" ],
 	"2-+0+[pi,pi]0++PiD" : ["amp_2mp0pf0980PiD","amp_2mp0pSigmaPiD"],
-	"2-+0+[pi,pi]1--PiP" : ["amp_2mp0pRhoPiP"],
-	"2-+0+[pi,pi]1--PiF" : ["amp_2mp0pRhoPiF"],
-	"2-+0+[pi,pi]2++PiS" : ["amp_2mp0pf2PiS"],
-	"2-+1+[pi,pi]1--PiP" : ["amp_2mp1pRhoPiP"],
-	"2++1+[pi,pi]1--PiD" : ["amp_2pp1pRhoPiD"]}
+	"2-+0+[pi,pi]1--PiP" : ["amp_2mp0pRhoPiP" ],
+	"2-+0+[pi,pi]1--PiF" : ["amp_2mp0pRhoPiF" ],
+	"2-+0+[pi,pi]2++PiS" : ["amp_2mp0pf2PiS"  ],
+	"2-+1+[pi,pi]1--PiP" : ["amp_2mp1pRhoPiP" ],
+	"2++1+[pi,pi]1--PiD" : ["amp_2pp1pRhoPiD" ],
+	"2++1+[pi,pi]2++PiP" : ["amp_2pp1pf2PiP"],
+	"3++0+[pi,pi]1--PiD" : ["amp_3pp0pRhoPiD" ],
+	"3++0+[pi,pi]2++PiP" : ["amp_3pp0pf2PiP"  ],
+	"3++0+[pi,pi]3--PiS" : ["amp_3pp0pRho3PiS"],
+	"4++1+[pi,pi]1--PiG" : ["amp_4pp1pRhoPiG" ],
+	"4++1+[pi,pi]2++PiF" : ["amp_4pp1pf2PiF"  ]}
 
 mappMerged = {
-	"0-+0+[pi,pi]0++PiS" : ["amp_0mp0p0ppPiS"],
-	"0-+0+[pi,pi]1--PiP" : ["amp_0mp0pRhoPiP"],
-	"1++0+[pi,pi]0++PiP" : ["amp_1pp0p0ppPiP"],
-	"1++0+[pi,pi]1--PiS" : ["amp_1pp0pRhoPiS"],
-	"1++1+[pi,pi]1--PiS" : ["amp_1pp1pRhoPiS"],
-	"2-+0+[pi,pi]0++PiD" : ["amp_2mp0p0ppPiD"],
-	"2-+0+[pi,pi]1--PiP" : ["amp_2mp0pRhoPiP"],
-	"2-+0+[pi,pi]1--PiF" : ["amp_2mp0pRhoPiF"],
-	"2-+0+[pi,pi]2++PiS" : ["amp_2mp0pf2PiS"],
-	"2-+1+[pi,pi]1--PiP" : ["amp_2mp1pRhoPiP"],
-	"2++1+[pi,pi]1--PiD" : ["amp_2pp1pRhoPiD"]}
+	"0-+0+[pi,pi]0++PiS" : ["amp_0mp0p0ppPiS" ],
+	"0-+0+[pi,pi]1--PiP" : ["amp_0mp0pRhoPiP" ],
+	"1++0+[pi,pi]0++PiP" : ["amp_1pp0p0ppPiP" ],
+	"1++0+[pi,pi]1--PiS" : ["amp_1pp0pRhoPiS" ],
+	"1++1+[pi,pi]1--PiS" : ["amp_1pp1pRhoPiS" ],
+	"2-+0+[pi,pi]0++PiD" : ["amp_2mp0p0ppPiD" ],
+	"2-+0+[pi,pi]1--PiP" : ["amp_2mp0pRhoPiP" ],
+	"2-+0+[pi,pi]1--PiF" : ["amp_2mp0pRhoPiF" ],
+	"2-+0+[pi,pi]2++PiS" : ["amp_2mp0pf2PiS"  ],
+	"2-+1+[pi,pi]1--PiP" : ["amp_2mp1pRhoPiP" ],
+	"2++1+[pi,pi]1--PiD" : ["amp_2pp1pRhoPiD" ],
+	"2++1+[pi,pi]2++PiP" : ["amp_2pp1pf2PiP"],
+	"3++0+[pi,pi]1--PiD" : ["amp_3pp0pRhoPiD" ],
+	"3++0+[pi,pi]2++PiP" : ["amp_3pp0pf2PiP"  ],
+	"3++0+[pi,pi]3--PiS" : ["amp_3pp0pRho3PiS"],
+	"4++1+[pi,pi]1--PiG" : ["amp_4pp1pRhoPiG" ],
+	"4++1+[pi,pi]2++PiF" : ["amp_4pp1pf2PiF"  ]}
+
 
 def getFileNameForSector(sector, withBarrierFactors = False, merged = False):
 	if withBarrierFactors:

@@ -1,6 +1,7 @@
 from massBinClass import massBin
 import numpy as np
 import numpy.linalg as la
+from modes import INTENS
 
 
 class allBins:
@@ -38,6 +39,15 @@ class allBins:
 			return chi2, params
 		else:
 			return chi2
+
+	def setParametersAndErrors(self, parameters, errors):
+		if not self.chi2init:
+			raise RuntimeError("Chi2 not initialized, cannot set errors")
+		for mb in self.massBins:
+			if not mb.setParametersAndErrors(parameters, errors):
+				print "Setting of error in one bin failed"
+				return False
+		return True
 
 	def addZeroMode(self, borders, zeroMode, eigenvalueHist = None):
 		for mb in self.massBins:
@@ -144,7 +154,7 @@ class allBins:
 		for mb in self.massBins:
 			mb.rotateToPhaseOfBin(nBin)
 
-	def fillHistograms(self, params, hists, mode = "INTENS"):
+	def fillHistograms(self, params, hists, mode = INTENS):
 		parCount = 0
 		for mb in self.massBins:
 			nz = 2*mb.nZero

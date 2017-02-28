@@ -1,5 +1,6 @@
 import numpy as np
 import pyRootPwa
+import physUtils
 
 def loadAmplitudeFile(ampFileName):
 	masses = []
@@ -16,12 +17,12 @@ def loadAmplitudeFile(ampFileName):
 class breitWigner:
 	def __init__(self):
 		self.nPar       = 2
-		self.parNames   = ["mass", "width"]
-		self.parameters = [0.] * self.nPar
+		self._parNames   = ["mass", "width"]
+		self._parameters = [0.] * self.nPar
 
 	def __call__(self, ms, par = None, externalKinematicVariables = []):
 		if par is None:
-			par = self.parameters
+			par = self._parameters
 		if not len(par) == self.nPar:
 			raise IndexError("breitWigner: Wrong number of parameters")
 		retVals = np.zeros((len(ms)), dtype = complex)
@@ -30,6 +31,14 @@ class breitWigner:
 		for i, m in enumerate(ms):
 			retVals[i] = num/(den - m**2)
 		return retVals
+
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+		self._parameters = params
+	def getParameters(self):
+		return self._parameters
+
 
 OMNES_LOADED = False
 def loadOmnes():
@@ -65,18 +74,18 @@ class omnesFunctionPolynomial:
 			self.nPar = 2 * nDimPol
 		else:
 			self.nPar = nDimPol
-		self.parNames = []
+		self._parNames = []
 		for i in range(nDimPol):
 			if complexPolynomial:
-				self.parNames.append("c"+str(i+1)+"_real")
-				self.parNames.append("c"+str(i+1)+"_imag")
+				self._parNames.append("c"+str(i+1)+"_real")
+				self._parNames.append("c"+str(i+1)+"_imag")
 			else:
-				self.parNames.append("c"+str(i+1))
-		self.parameters = [0.]*self.nPar
+				self._parNames.append("c"+str(i+1))
+		self._parameters = [0.]*self.nPar
 
 	def __call__(self, ms, par = None, externalKinematicVariables = []):
 		if par is None:
-			par = self.parameters
+			par = self._parameters
 		if not len(par) == self.nPar:
 			raise IndexError("omnesFunctionPolynomial: Wrong number of parameters")
 		retVals = np.zeros((len(ms)), dtype = complex)
@@ -93,6 +102,16 @@ class omnesFunctionPolynomial:
 			retVals[i] = poly * lookupOmnes(s)
 		return retVals
 
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+		self._parameters = params
+
+	def getParameters(self):
+		return self._parameters
+
+
+
 class omnesFunctionMonomial:
 	"""
 	Several omnes monomiala can use the intrinsic linearity in the parameters and avoid fitting (Real coefficients, whoever are not possible)
@@ -100,12 +119,12 @@ class omnesFunctionMonomial:
 	def __init__(self, degree):
 		self.degree     = degree
 		self.nPar       =  0
-		self.parameters = [ ]
-		self.parNames   = [ ]
+		self._parameters = [ ]
+		self._parNames   = [ ]
 
 	def __call__(self, ms, par = None, externalKinematicVariables = []):
 		if par is None:
-			par = self.parameters
+			par = self._parameters
 		if not len(par) == self.nPar:
 			raise IndexError("omnesFunctionMonomial: Wrong number of parameters")
 		retVals = np.zeros((len(ms)), dtype = complex)
@@ -113,23 +132,50 @@ class omnesFunctionMonomial:
 			retVals[i] =  m**(2*self.degree) * lookupOmnes(m**2)
 		return retVals
 
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+		self._parameters = params
+
+	def getParameters(self):
+		return self._parameters
+
+
+
+
 class rpwaBreitWigner:
 	"""
-	Breit-Wigner as defined in rootPwa
+	Breit-Wigner as defined in rootPwa (But rebuilt with own code in python 
+	to have full control
 	"""
-	def __init__(self, m1, m2, m3, J, L):
-		self.L          = 2*L
-		self.J          = 2*J
-		self.m1         = m1
-		self.m2         = m2
-		self.m3         = m3
-		self.nPar       = 2
-		self.parameters = [1.,.1]
-		self.parNames   = ["mass", "width"]
+	def __init__(self, m1, m2, m3, J, L, fitPr = False):
+		self.L            = L
+		self.J            = J
+		self.m1           = m1
+		self.m2           = m2
+		self.m3           = m3
+		self.Pr           = 0.1973
+		self.nPar         = 2
+		self._parameters  = [1.,.1]
+		self._parNames    = ["mass", "width"]
+		self.fitPr        = fitPr
+		self.compensatePr = True # If True and self.fitPr, the resultung
+					 # amplitude will be compensated for 
+					 # self.pr. Meaning, that it will be 
+					 # assumed, that in the normalization, 
+					 # barrier factors with Pr = 0.1973 have
+					 # been used, which will be divided out 
+					 # again.
+		if self.fitPr:
+			self.nPar += 2
+			self._parameters.append(self.Pr)
+			self._parameters.append(self.Pr)
+			self._parNames.append("PrMother")
+			self._parNames.append("PrIsob")
 
 	def __call__(self, ms, par = None, externalKinematicVariables = []):
 		if par is None:
-			par = self.parameters
+			par = self._parameters
 		if not len(par) == self.nPar:
 			raise IndexError("rpwaBreitWigner: Wring number of parameters")
 		if len(externalKinematicVariables) < 1:
@@ -138,18 +184,39 @@ class rpwaBreitWigner:
 		M0 = par[0].real
 		G0 = par[1].real
 
-		q0 = abs(pyRootPwa.core.breakupMomentumSquared(M0, self.m1, self.m2, True))**.5
+		q0 = physUtils.breakupMomentum(M0, self.m1, self.m2)
+
 		if q0 == 0.:
 			return [0.]*len(ms)
 		retVals = np.zeros((len(ms)), dtype = complex)
+		if self.fitPr:
+			PrMother = par[2]
+			PrIsob = par[3]
+		else:
+			PrMother = self.Pr
+			PrIsob = self.Pr
+
 		for i,M in enumerate(ms):
-			q = pyRootPwa.core.breakupMomentum(M,  self.m1, self.m2)
-			if M + self.m3 >= externalKinematicVariables[0]:
-				Q = 0.
-			else:
-				Q = pyRootPwa.core.breakupMomentum(externalKinematicVariables[0],  M, self.m3)
-			retVals[i] = pyRootPwa.core.breitWigner(M, M0, G0, self.J, q, q0) # * pyRootPwa.core.barrierFactorSquared(self.J, q)**.5*pyRootPwa.core.barrierFactorSquared(self.L, Q)**.5
+			q = physUtils.breakupMomentum(M, self.m1, self.m2)
+			retVals[i] = physUtils.breitWigner(M,M0,G0, self.J, q, q0, PrIsob)
+			if self.fitPr and self.compensatePr:
+				compensationFactor = physUtils.barrierFactor(self.J, q, PrIsob)/physUtils.barrierFactor(self.J, q, self.Pr)
+				Q = physUtils.breakupMomentum(externalKinematicVariables[0],  M, self.m3)
+				if Q == 0.:
+					compensationFactor = 0.
+				else:
+					compensationFactor *= physUtils.barrierFactor(self.L, Q, PrMother)/physUtils.barrierFactor(self.L, Q, self.Pr)
+				retVals[i] *= compensationFactor
 		return retVals
+
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+		self._parameters = params
+	
+	def getParameters(self):
+		return self._parameters
+
 
 class rpwaBreitWignerInt:
 	"""
@@ -163,14 +230,14 @@ class rpwaBreitWignerInt:
 		self.m3           = m3
 		self.nPar         = 2
 		self.nPoints      = nPoints
-		self.parameters   = [1.,.1]
-		self.parNames     = ["mass", "width"]
+		self._parameters   = [1.,.1]
+		self._parNames     = ["mass", "width"]
 		self.weightBF     = False
 		self.weightIntens = False
 
 	def __call__(self, ms, par = None, externalKinematicVariables = []):
 		if par is None:
-			par = self.parameters
+			par = self._parameters
 		if not len(par) == self.nPar:
 			raise IndexError("rpwaBreitWigner: Wrong number of parameters")
 		if len(externalKinematicVariables) < 1:
@@ -216,18 +283,28 @@ class rpwaBreitWignerInt:
 			retVals[i] = ampl/totalWeight
 		return retVals
 
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+		self._parameters = params
+
+	def getParameters(self):
+		return self._parameters
+
+
+
 class m3PiHalf:
 	"""
 	Function to test the external kinematic variables, setting everything below m3Pi/2 to 1., above to 0.
 	"""
 	def __init__(self):
 		self.nPar       = 0
-		self.parameters = []
-		self.parNames   = []
+		self._parameters = []
+		self._parNames   = []
 
 	def __call__(self, ms, par = None, externalKinematicVariables = []):
 		if par is None:
-			par = self.parameters
+			par = self._parameters
 		if not len(par) == self.nPar:
 			raise IndexError("rpwaBreitWigner: Wrong number of parameters")
 		if len(externalKinematicVariables) < 1:
@@ -237,6 +314,14 @@ class m3PiHalf:
 			if m < externalKinematicVariables[0]/2.:
 				retVals[i] = 1.
 		return retVals
+
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+		self._parameters = params
+
+	def getParameters(self):
+		return self._parameters
 
 		
 class fixedParameterization:
@@ -252,14 +337,14 @@ class fixedParameterization:
 			self.nPar = 2*polynomialDegree
 		else:
 			self.nPar = polynomialDegree
-		self.parNames = []
+		self._parNames = []
 		for i in range(self.polynomialDegree):
 			if complexPolynomial:
-				self.parNames.append("c"+str(i+1)+"_real")
-				self.parNames.append("c"+str(i+1)+"_imag")
+				self._parNames.append("c"+str(i+1)+"_real")
+				self._parNames.append("c"+str(i+1)+"_imag")
 			else:
-				self.parNames.append("c"+str(i+1))
-		self.parameters = [0.]*self.nPar
+				self._parNames.append("c"+str(i+1))
+		self._parameters = [0.]*self.nPar
 		self.m,self.r,self.i = loadAmplitudeFile(self.ampFileName)
 
 	def lookupValue(self, m):
@@ -275,7 +360,7 @@ class fixedParameterization:
 
 	def __call__(self, ms, par = None, externalKinematicVariables = []):
 		if par is None:
-			par = self.parameters
+			par = self._parameters
 		if not len(par) == self.nPar:
 			raise IndexError("fixedParameterization: Wrong number of parameters")
 		retVals = np.zeros((len(ms)), dtype = complex)
@@ -290,6 +375,15 @@ class fixedParameterization:
 				polynom += monom
 			retVals[i] =  polynom * self.lookupValue(m)
 		return retVals
+
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+		self._parameters = params
+
+	def getParameters(self):
+		return self._parameters
+
 
 def main():
 	ms = []
