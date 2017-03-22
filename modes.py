@@ -24,3 +24,6 @@ class IMAGTHEO:
 
 class PHASETHEO:
 	IS_THEO = True
+
+class REIMCORRELATION:
+	IS_THEO = False

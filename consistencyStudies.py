@@ -15,13 +15,14 @@ from fixedparameterizationPaths import getFileNameForSector
 
 def main():
 	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
-#	sectors    = ["1++0+[pi,pi]0++PiP","1++0+[pi,pi]1--PiS"]
-#	sectors    = ["2-+0+[pi,pi]0++PiD","2-+0+[pi,pi]1--PiP","2-+0+[pi,pi]1--PiF","2-+0+[pi,pi]2++PiS"]
+
+	sectors    = ["2-+0+[pi,pi]0++PiD","2-+0+[pi,pi]1--PiP","2-+0+[pi,pi]1--PiF","2-+0+[pi,pi]2++PiS"]
 #	sectors    = ["2-+0+[pi,pi]1--PiP"]
 #	sectors    = ["1-+1+[pi,pi]1--PiP"]
 #	sectors    = ["1++0+[pi,pi]0++PiP"]
 #	sectors    = ["2++1+[pi,pi]1--PiD"]
-	sectors    = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
+#	sectors    = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
+#	sectors    = ["1++0+[pi,pi]0++PiP","1++0+[pi,pi]1--PiS"]
 #	sectors    = ["0-+0+[pi,pi]1--PiP"]
 #	sectors    = ["0-+0+[pi,pi]0++PiS"]
 #	sectors    = ["2-+0+[pi,pi]2++PiS"]
@@ -115,6 +116,7 @@ def main():
 			if not stopBin - startBin == 1:
 				raise ValueError("Phase fit only possible for a single bin")
 			outFileName += "_phase"
+			modelMode    = "fixedShapes"
 		else:
 			raise ValueError("Unknown argument: '" + arg + "'")
 
@@ -124,8 +126,8 @@ def main():
 	else:
 		modelMode = ""
 		tBin      = 0
-		startBin  = 31
-		stopBin   = 32
+		startBin  = 33
+		stopBin   = 34
 
 	if modelMode == "BW" or modelMode == "2BW":
 #		rho = pc.breitWigner()
@@ -423,6 +425,8 @@ def main():
 				rv = resultViewer([intenses[i], intensD[i], intensT[i]],[reals[i], realsD[i], realsT[i]],[imags[i], imagsD[i], imagsT[i]], [phases[i], phasesD[i], phasesT[i]], startBin = startBin, startCommand = startCommand)
 			else:
 				rv = resultViewer([intenses[i], intensD[i]],[reals[i], realsD[i]],[imags[i], imagsD[i]],[phases[i], phasesD[i]], startBin = startBin, startCommand = startCommand)
+			rv.addiColor = rv.theoColor
+			rv.corrColor = rv.dataColor
 			rv.run()
 
 if __name__ == "__main__":

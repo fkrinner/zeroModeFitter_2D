@@ -118,4 +118,11 @@ def getPhaseDirection(ampls):
 		retVal[2*i+1] = pd[1]
 	return normVector(retVal)
 
+def getZeroModeNumber(hist):
+	name = hist.GetName()
+	if not name.startswith('zero'):
+		raise NameError("'" + name + "' is not the name of a zeroMode histogram")
+	return int(name.split('_')[0][4:])
+
+
 

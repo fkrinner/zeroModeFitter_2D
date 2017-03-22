@@ -2,9 +2,9 @@ import pyRootPwa
 import numpy as np
 import numpy.linalg as la
 import utils
-from utils import getZeroHistSectors
+from utils import getZeroHistSectors, normVector, getZeroModeNumber
 from cmath import phase, pi
-from modes import INTENS, PHASE, REAL, IMAG, INTENSNORM, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO
+from modes import INTENS, PHASE, REAL, IMAG, INTENSNORM, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO, REIMCORRELATION
 
 class massBin:
 	def __init__(self, nBin, realHists, imagHists, normHists, indexHists, coma):
@@ -58,12 +58,14 @@ class massBin:
 						self.coma[2*count+1, 2*count2+1] = coma.GetBinContent(2*comaIndex+2, 2*comaIndex2+2)
 						count2 += 1
 				count +=1
-		self.comaInv = utils.pinv(self.coma, self.numLim) # the covariance matrix used is already inverted
+		self.makeComaInv()
 		self.borders = [0]
 		for i in range(self.nSect):
 			self.borders.append(self.borders[-1] + self.nBins[i])
 		self.nZero           =  0
 		self.zeroModes       = [ ]
+		self.zeroModeNumbers = [ ]
+		self.zeroModeTitles  = [ ] 
 		self.zeroEigenvalues = [ ]
 		self.hasTheo         = False
 		self.hasMassRange    = False
@@ -313,6 +315,11 @@ class massBin:
 				else:
 					self.coma[i,j] = 0.
 					self.comaInv[i,j] = 0.
+		self.specialCOMAs = {}
+
+	def makeComaInv(self):
+		self.comaInv = utils.pinv(self.coma, self.numLim)
+	
 
 	def removeZeroModeFromComa(self):
 		if len(self.zeroModes) == 0:
@@ -324,8 +331,27 @@ class massBin:
 				for j in range(dim/2):
 					transformationMatrix[2*i  ,2*j  ] -= self.zeroModes[z][i] * self.zeroModes[z][j]
 					transformationMatrix[2*i+1,2*j+1] -= self.zeroModes[z][i] * self.zeroModes[z][j]
-		self.coma         = np.dot(transformationMatrix, np.dot(self.coma, transformationMatrix))
-		self.comaInv      = utils.pinv(self.coma, self.numLim)
+		self.coma         = np.dot(transformationMatrix, np.dot(self.coma, transformationMatrix)) # no transpose needed, since transformationMatrix is symmetric
+		self.makeComaInv()
+		self.specialCOMAs = {}
+
+	def getGlobalPhaseDirection(self):
+		retVal = np.zeros((2*self.totalBins))
+		for i in range(self.totalBins):
+			retVal[2*i  ] = -self.imags[i]
+			retVal[2*i+1] =  self.reals[i]
+		
+		return normVector(retVal)
+
+	def removeGlobalPhaseFromComa(self):
+		phaseDirection = self.getGlobalPhaseDirection()
+		dim = 2*self.totalBins
+		transformationMatrix = np.identity(dim)
+		for i in range(dim):
+			for j in range(dim):
+				transformationMatrix[i,j] -= phaseDirection[i] * phaseDirection[j]
+		self.coma         = np.dot(transformationMatrix, np.dot(self.coma, transformationMatrix)) # no transpose needed, since transformationMatrix is symmetric
+		self.makeComaInv()
 		self.specialCOMAs = {}
 
 	def setMassRanges(self, massRanges):
@@ -360,6 +386,23 @@ class massBin:
 						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
 							self.theo[b] = 0.+0.j
 		self.hasTheo = True
+
+	def writeZeroModeCoefficients(self, coefficients, outFileName, tBin = "<tBin>", mode = 'a'):
+		tBin  = str(tBin)
+		cmplx = False
+		if len(coefficients) == self.nZero:
+			cmplx = True
+		elif not len(coefficients) == 2*self.nZero:
+			raise IndexError("Number of coefficients for "+str(self.nZero)+" modes does not match (netiher real nor complex): " +str(len(coefficients)))
+		with open(outFileName, mode) as out:
+			out.write(tBin + ' ' + str(self.bin3pi))
+			for i in range(self.nZero):
+				out.write(' ' + self.zeroModeTitles[i])
+				if cmplx:
+					out.write(' ' + str(coefficients[i].real) + ' ' + str(coefficients[i].imag))
+				else:
+					out.write(' ' + str(coefficients[2*i]) + ' ' + str(coefficients[2*i+1]))
+			out.write('\n')
 
 	def renormZeroModes(self):
 		for z in range(self.nZero):
@@ -399,6 +442,8 @@ class massBin:
 		if allZero:
 #			print "WARNING: Zero mode is vanishing everywhere, do not add"
 			return False
+		self.zeroModeNumbers.append(getZeroModeNumber(modeHist))
+		self.zeroModeTitles.append(modeHist.GetTitle())
 		self.zeroModes.append(newMode)
 		self.nZero = len(self.zeroModes)
 
@@ -536,7 +581,7 @@ class massBin:
 		Cother = np.dot(Dother, np.dot(other.comaInv, Dother))
 		return Cself + Cother
 
-	def fillHistograms(self, params, hists, mode = "INTENS"):
+	def fillHistograms(self, params, hists, mode = INTENS):
 		if mode.IS_THEO and not self.hasTheo:
 			print "No theory loaded, cannot fill histogram"
 		if not len(hists) == self.nSect:
@@ -569,6 +614,8 @@ class massBin:
 				elif mode == IMAG:
 					val = ampl.imag
 					jac[1] = 1.
+				elif mode == REIMCORRELATION:
+					val = coma[0,1]
 				elif mode == PHASE:
 					val = phase(ampl)
 					if ampl.real == 0.:
@@ -612,7 +659,7 @@ class massBin:
 			jac[2*i+1,2*i  ] =   im
 			jac[2*i+1,2*i+1] =   re
 		self.coma         = np.dot(jac, np.dot(self.coma,np.transpose(jac)))
-		self.comaInv      = utils.pinv(self.coma, self.numLim) # the covariance matrix used is already inverted
+		self.makeComaInv()
 		self.specialCOMAs = {}
 
 	def comaIsSymmetric(self):

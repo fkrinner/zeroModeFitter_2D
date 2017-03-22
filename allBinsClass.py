@@ -57,6 +57,10 @@ class allBins:
 		for mb in self.massBins:
 			mb.renormZeroModes()
 
+	def removeGlobalPhaseFromComa(self):
+		for mb in self.massBins:
+			mb.removeGlobalPhaseFromComa()
+
 	def setMassRanges(self, massRanges):
 		for mb in self.massBins:
 			mb.setMassRanges(massRanges)
@@ -131,6 +135,22 @@ class allBins:
                                         A[2*(countZero + j)+1,2*(countZero + k)+1] += a[2*j+1,2*k+1]
 			countZero += self.massBins[i].nZero	
 		return A,B,C
+
+	def writeZeroModeCoefficients(self, coefficients, outFileName, tBin = "<tBin>"):
+		nZero = self.nZero()
+		cmplx = False
+		if len(coefficients) == nZero:
+			cmplx = True
+		elif not len(coefficients) == 2*nZero:
+			raise IndexError("Number of coefficients for "+str(self.nZero)+" modes does not match (netiher real nor complex): " +str(len(coefficients)))
+		tBin  = str(tBin)		
+		count = 0
+		for mb in self.massBins:
+			nn = mb.nZero
+			if not cmplx:
+				nn *= 2
+			mb.writeZeroModeCoefficients(coefficients[count:count+nn], outFileName, tBin, 'a')
+			count += nn
 
 	def printNzero(self):
 		nZeros = []

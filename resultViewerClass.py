@@ -1,15 +1,19 @@
+import matplotlib
+matplotlib.use("Agg")
+
 from fabi import getch
 import plotfabi as pf
 import pyRootPwa
 import numpy as np
 import os, sys
 from modes import INTENS, PHASE
-from parseFiles import parseTH1D, parseTGraph
+from parseFiles import parseTH1D, parseTGraph, parseArgand
 os.system(". add_to_front PATH /nfs/mnemosyne/sys/slc6/contrib/texlive/2013/bin/x86_64-linux")
 import modernplotting.root
 import modernplotting.mpplot
 import modernplotting.colors
 import modernplotting.toolkit
+import modernplotting.specialPlots
 
 
 def findMinBin(hist):
@@ -28,6 +32,28 @@ def findMinBin(hist):
 		maxZeroBin -= 1
 		if maxZeroBin == -1:
 			return maxZeroBin + 1
+
+def getMaximumRanges(argands):
+	inf  =  float('inf')
+	xMin =  inf
+	xMax = -inf
+	yMin =  inf
+	yMax = -inf
+	for argand in argands:
+		xMin = min(xMin, argand.GetXaxis().GetXmin())
+		xMax = max(xMax, argand.GetXaxis().GetXmax())
+		yMin = min(yMin, argand.GetYaxis().GetXmin())
+		yMax = max(yMax, argand.GetYaxis().GetXmax())
+	dX = xMax - xMin
+	dY = yMax - yMin
+	dd = dX - dY
+	if dd < 0.:
+		yMin -= dd/2
+		yMax += dd/2
+	else:
+		xMin += dd/2
+		xMax -= dd/2
+	return (xMin, xMax), (yMin, yMax)
 
 def setAxesRange(graph):
 	hist = graph.GetHistogram()
@@ -99,7 +125,7 @@ def getStdCmd():
 		return ["", "intens_"+folder+suffix+".pdf", intenses, "argands_"+folder+suffix+".pdf", argands]
 
 class resultViewer:
-	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 34, startCommand = ""):
+	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 34, startCommand = "", reImCorrel = None):
 		self.nHists       = len(intensHists)
 		if self.nHists < 1:
 			raise ValueError("No histograms given")
@@ -111,6 +137,7 @@ class resultViewer:
 		self.realHists    = realHists
 		self.imagHists    = imagHists
 		self.phaseHists   = phaseHists
+		self.reImCorrel   = reImCorrel
 		if not len(self.realHists) ==self. nHists or not len(self.imagHists) == self.nHists or not len(self.phaseHists) == self.nHists:
 			raise ValueError("Size of histograms does not match")
 
@@ -122,6 +149,7 @@ class resultViewer:
 		self.plotCorr  = True
 		self.plotTheo  = True
 		self.plotData  = True
+		self.noEllipse = False
 
 		self.mMin = 0.27
 		self.mMax = 1.94
@@ -143,7 +171,7 @@ class resultViewer:
 			self.intensCanvas.SetWindowSize(500,500)
 			self.sliceCanvas.SetWindowSize( 500,500)
 			self.argandCanvas.SetWindowSize(500,500)
-			self.phaseCanvas.SetWindowSize(500,500)
+			self.phaseCanvas.SetWindowSize( 500,500)
 
 
 	def getArgand(self, nBin, index = 0):
@@ -170,6 +198,28 @@ class resultViewer:
 		else:
 			setAxesRange(argand)
 		return argand
+
+	def getArgandData(self, nBin, index, getCOMA = False):
+		if not self.reImCorrel and getCOMA:
+			raise RuntimeError("Can not get COMA with no reImCorrel-histogram set")
+		reals = []
+		imags = []
+		comas = []
+		for i in range(self.binsY):
+			re  = self.realHists[index].GetBinContent(nBin + 1, i+1)
+			im  = self.imagHists[index].GetBinContent(nBin + 1, i+1)
+			if re == 0. and im == 0.:
+				continue
+			reals.append(re)
+			imags.append(im)
+
+			if getCOMA:
+				reR    = self.realHists[index].GetBinError(  nBin + 1, i+1)
+				imR    = self.imagHists[index].GetBinError(  nBin + 1, i+1)
+				correl = self.reImCorrel.GetBinContent(      nBin + 1, i+1)
+				coma = [ [reR**2, correl],[correl, imR**2] ]
+				comas.append(coma)
+		return reals, imags, comas			
 
 	def getSlice(self, nBin, index = 0, mode = INTENS):
 		if index >= self.nHists:
@@ -346,7 +396,8 @@ class resultViewer:
 					modernplotting.root.plotTH1D(hists[2], plot, markerDefinitions = { 'zorder':2, 'color': self.theoColor})
 				if self.plotCorr:
 					modernplotting.root.plotTH1D(hists[0], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':3, 'color':self.corrColor})
-				plot.setXlabel("\mTwoPi [\SI{}{\MeVcc}]")
+				plot.setXlabel("$m_{\pi^-\pi^+} [\mathrm{GeV}/c^2]$")
+#				plot.setXlabel("Gande ubesande")
 				plot.setXlim(self.mMin,self.mMax)
 				plot.setYlabel(pf.intens + ' ' + pf.AU)
 				plot.setYlim(0.,hists[0].GetMaximum()*1.2)
@@ -377,21 +428,44 @@ class resultViewer:
 		else:
 			with modernplotting.toolkit.PdfWriter(argandPlotName) as pdfOutput:
 				plot = style.getPlot1D()
-				argands = [self.getArgand(nBin, index) for index in range(self.nHists)]
-				for fn in addFiles:
-					graph = parseTGraph(fn)
-					modernplotting.root.plotTH1D(graph, plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 0, 'color':self.addiColor})
-				if self.plotData:
-					modernplotting.root.plotTH1D(argands[1], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 1, 'color':self.dataColor})
-				if len(argands) > 2 and self.plotTheo:
-					modernplotting.root.plotTH1D(argands[2], plot, maskValue = 0.,markerDefinitions = {'marker' : None, 'linestyle' : 'solid', 'zorder' : 2, 'color': self.theoColor})
-				if self.plotCorr:
-					modernplotting.root.plotTH1D(argands[0], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 3, 'color' : self.corrColor})
-				ranges = setAxesRange(argands[0])
-				plot.setXlabel(pf.realPart + ' ' + pf.AU)
-				plot.setYlabel(pf.imagPart + ' ' + pf.AU)
-				plot.setXlim(ranges[0])
-				plot.setYlim(ranges[1])
-				pdfOutput.savefigAndClose()
+				if self.noEllipse or not self.reImCorrel:
+					argands   = [self.getArgand(nBin, index) for index in range(self.nHists)]
+					addGraphs = []
+					for fn in addFiles:
+						graph = parseTGraph(fn)
+						addGraphs.append(graph)
+						modernplotting.root.plotTH1D(graph, plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 0, 'color':self.addiColor})
+					if self.plotData:
+						modernplotting.root.plotTH1D(argands[1], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 1, 'color':self.dataColor})
+					if len(argands) > 2 and self.plotTheo:
+						modernplotting.root.plotTH1D(argands[2], plot, maskValue = 0.,markerDefinitions = {'marker' : None, 'linestyle' : 'solid', 'zorder' : 2, 'color': self.theoColor})
+					if self.plotCorr:
+						modernplotting.root.plotTH1D(argands[0], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 3, 'color' : self.corrColor})
+					ranges = setAxesRange(argands[0])
+	#				ranges = getMaximumRanges(argands + addGraphs)
+	#				ranges = ((-500., 500.), (-500., 500.))
+					plot.setXlabel(pf.realPart + ' ' + pf.AU)
+					plot.setYlabel(pf.imagPart + ' ' + pf.AU)
+					plot.setXlim(ranges[0])
+					plot.setYlim(ranges[1])
+				else:
+					argandRanges = setAxesRange(self.getArgand(nBin, 0))
+					for fn in addFiles:
+						X,EX,Y,EY = parseArgand(fn, skipZero = True)
+						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 0, 'color':self.addiColor})
+					if self.plotData:
+						X,Y,COMA = self.getArgandData(nBin, 1, getCOMA = False)
+						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 1, 'color':self.dataColor})
+					if self.nHists > 2 and self.plotTheo:
+						X,Y,COMA = self.getArgandData(nBin, 2, getCOMA = False)
+						plot.plot(X, Y, **{'marker' : None, 'markersize' : 0., 'linestyle' : 'solid', 'linewidth' : .7,  'zorder' : 2, 'color': self.theoColor})
+					if self.plotCorr:
+						X,Y,COMA = self.getArgandData(nBin, 0, getCOMA = True)
+						modernplotting.specialPlots.plotErrorEllipses(plot, X, Y, COMA, markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 3, 'color' : self.corrColor})
+					plot.setXlabel(pf.realPart + ' ' + pf.AU)
+					plot.setYlabel(pf.imagPart + ' ' + pf.AU)
+					plot.setXlim(argandRanges[0])
+					plot.setYlim(argandRanges[1])
+				pdfOutput.savefigAndClose()					
 		print "Writing to .pdf finished."
 

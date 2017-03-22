@@ -4,7 +4,7 @@ import numpy as np
 import numpy.linalg as la
 from allBinsClass import allBins
 from massBinClass import massBin
-from modes import REAL, IMAG, PHASE, INTENS, INTENSNORM, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO
+from modes import REAL, IMAG, PHASE, INTENS, INTENSNORM, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO, REIMCORRELATION
 from resultViewerClass import resultViewer
 import os, sys
 from utils import zeroForSectors, getZeroHistBorders, renormToBinWidth
@@ -13,23 +13,28 @@ import scipy.optimize
 from removeZeroModes import removeCertainZeroModes
 from fixedparameterizationPaths import getFileNameForSector
 
+
 def main(rhoFileName = ""):
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_3pp.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_bigger2pp.root"
 	inFileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/ppppppppp/DpPiPiPi.root"
-#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_4pp.root"
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
 	sectors = ["Dp[pi,pi]0++PiS","Dp[pi,pi]1--PiP"]
 #	sectors = ["Dp[pi,pi]0++PiS","Dp[pi,pi]2++PiD"]
 #	sectors = ["Dp[pi,pi]1--PiP","Dp[pi,pi]2++PiD"]
 #	sectors = ["Dp[pi,pi]0++PiS","Dp[pi,pi]1--PiP","Dp[pi,pi]2++PiD"]
+#	sectors = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
 #	sectors = ["1++0+[pi,pi]0++PiP","1++0+[pi,pi]1--PiS"]
 #	sectors = ["2-+0+[pi,pi]0++PiD","2-+0+[pi,pi]1--PiP","2-+0+[pi,pi]1--PiF","2-+0+[pi,pi]2++PiS"]
 #	sectors = ["2-+0+[pi,pi]1--PiP"]
+#	sectors = ["2-+0+[pi,pi]0++PiD"]
 #	sectors = ["1-+1+[pi,pi]1--PiP"]
 #	sectors = ["1++0+[pi,pi]0++PiP"]
 #	sectors = ["2++1+[pi,pi]1--PiD"]
+#	sectors = ["0-+0+[pi,pi]0++PiS"]
 #	sectors = ["0-+0+[pi,pi]1--PiP"]
+#	sectors = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
 #	sectors = ["2-+0+[pi,pi]2++PiS"]
 #	sectors = ["2-+1+[pi,pi]1--PiP"]
 #	sectors = ["1++0+[pi,pi]1--PiS","1++0+[pi,pi]0++PiP"]
@@ -40,18 +45,18 @@ def main(rhoFileName = ""):
 #	sectors = ["3++0+[pi,pi]1--PiD"]
 #	sectors = ["3++0+[pi,pi]3--PiS","3++0+[pi,pi]2++PiP","3++0+[pi,pi]1--PiD"]
 #	sectors = ["4++1+[pi,pi]1--PiG", "4++1+[pi,pi]2++PiF"]
-#	sectors = ["2++1+[pi,pi]1--PiD","2++1+[pi,pi]2++PiP"]
+#	sectors = ["2+q+1+[pi,pi]1--PiD","2++1+[pi,pi]2++PiP"]
 
 #	sectors = [sectors[1]]
 
 	doSpecialOneBinFit = -15 # negative values turn it off
 
 	sectorUseMap = { # Defines, if for the given sector a theory curve will be used
-		"0-+0+[pi,pi]0++PiS" : True,
+		"0-+0+[pi,pi]0++PiS" : False,
 		"0-+0+[pi,pi]1--PiP" : True,
-		"1++0+[pi,pi]0++PiP" : True, 
+		"1++0+[pi,pi]0++PiP" : False, 
 		"1++0+[pi,pi]1--PiS" : True, 
-		"2-+0+[pi,pi]0++PiD" : True, 
+		"2-+0+[pi,pi]0++PiD" : False, 
 		"2-+0+[pi,pi]1--PiP" : True, 
 		"2-+0+[pi,pi]1--PiF" : True, 
 		"2-+0+[pi,pi]2++PiS" : True
@@ -62,25 +67,29 @@ def main(rhoFileName = ""):
 		if '1--' in sector:
 			pass
 #			sectorRangeMap[sector] = (0.55,1.00)
+		if '0++' in sector:
+			pass
+#			sectorRangeMap[sector] = (0.,.94)
 
 	tBin             = 0
 	startBin         = 34
 	stopBin          = 35
 #	startBin         = 15
 #	stopBin          = 50
-	polynomialDegree = 1
-#	modelMode        = "fixedShapes"
+	polynomialDegree = 0
+#	modelMode        = "
 	modelMode        = "simpleBW_Dp"
 #	modelMode        = "BW"
 #	modelMode        = "explicitRhoFile"
 	useSmooth        = False
-	fitShape         = False
+	fitShape         = True
+	phaseFit         = False
 
 	if modelMode == "BW" or modelMode == "2BW":
 #		rho = pc.breitWigner()
-		rho = pc.rpwaBreitWignerInt(0.13957018,0.13957018,0.13957018,1,1)
-#		rhoParameters = [.77549, .1491]
-		rhoParameters = [1.2, .2]
+		rho = pc.rpwaBreitWignerInt(0.13957018,0.13957018,0.13957018,1,0)
+		rhoParameters = [.77549, .1491]
+#		rhoParameters = [1.2, .2]
 		rho.setParameters(rhoParameters)
 #		rho.weightIntens = True
 #		rhoParameters = [1.27549, .100]
@@ -102,9 +111,10 @@ def main(rhoFileName = ""):
 		f0.setParameters([.98, .1])
 		rho = pc.breitWigner()
 		rho.setParameters([ .77, .16])
-		f2 = pc.breitWigner()
-		f2.setParameters([1.27, .2 ])
-		waveModel = {"Dp[pi,pi]0++PiS" : [f0], "Dp[pi,pi]1--PiP" : [rho], "Dp[pi,pi]2++PiD" : [f2]}
+#		f2 = pc.breitWigner()
+#		f2.setParameters([1.27, .2 ])
+#		waveModel = {"Dp[pi,pi]0++PiS" : [f0], "Dp[pi,pi]1--PiP" : [rho], "Dp[pi,pi]2++PiD" : [f2]}
+		waveModel = {"Dp[pi,pi]0++PiS" : [f0], "Dp[pi,pi]1--PiP" : [rho]}
 
 	elif modelMode == "fixedShapes":
 		useBF       = False
@@ -210,12 +220,10 @@ def main(rhoFileName = ""):
 			ab.addZeroMode(borders, zeroHist)
 #		ab.rotateToPhaseOfBin(10)
 		ab.removeZeroModeFromComa()
-
+		ab.removeGlobalPhaseFromComa()
 #		ab.unifyComa()
 
-		special = False
-
-		if special:
+		if phaseFit:
 			for mb in ab.massBins:
 				mb.setZeroTheory()
 			from random import random
@@ -244,7 +252,7 @@ def main(rhoFileName = ""):
 
 			sys.exit(0)
 
-		if not useSmooth and not special:
+		if not useSmooth and not phaseFit:
 			ab.initChi2(waveModel)
 			ab.setMassRanges(sectorRangeMap)
 			totalPars = []
@@ -264,13 +272,19 @@ def main(rhoFileName = ""):
 			paramsZ      = ab.linearizeZeroModeParameters(params)
 			ab.setTheoryFromOwnFunctions(params, True)
 			print "The final chi2 =",chi2
-		elif not special:
+		elif not phaseFit:
 			A,B,C   =  ab.getSmoothnessABC()
 			paramsZ = -np.dot(la.inv(A + np.transpose(A)), B)
+
+#		for i in range(len(paramsZ)):
+#			paramsZ[i] = 0.
+
+		ab.writeZeroModeCoefficients(paramsZ, "zeroModeCorrections_std11", str(tBin))
 
 		intenses = []
 		reals    = []
 		imags    = []
+		correl   = []
 		phases   = []
 		intensD  = []
 		realsD   = []
@@ -293,6 +307,10 @@ def main(rhoFileName = ""):
 			imagH = rh.Clone()
 			imagH.Reset()
 			imags.append(imagH)
+
+			reImCorrH = rh.Clone()
+			reImCorrH.Reset()
+			correl.append(reImCorrH)
 
 			phaseH = rh.Clone()
 			phaseH.Reset()
@@ -334,6 +352,7 @@ def main(rhoFileName = ""):
 		ab.fillHistograms(paramsZ, reals,  mode = REAL )
 		ab.fillHistograms(paramsZ, imags,  mode = IMAG )
 		ab.fillHistograms(paramsZ, phases, mode = PHASE)
+		ab.fillHistograms(paramsZ, correl, mode = REIMCORRELATION)
 		zeroP = [0.]*len(paramsZ)
 		ab.fillHistograms(zeroP, intensD              )
 		ab.fillHistograms(zeroP, realsD,  mode = REAL )
@@ -346,6 +365,7 @@ def main(rhoFileName = ""):
         	        ab.fillHistograms(zeroP, imagsT,   mode = IMAGTHEO  )
         	        ab.fillHistograms(zeroP, phasesT,  mode = PHASETHEO )
 
+
 		for i in range(len(histListReal)):
 			renormToBinWidth(intenses[i]  )
 			renormToBinWidth(intensD[i]   )
@@ -356,7 +376,7 @@ def main(rhoFileName = ""):
 			renormToBinWidth(imags[i] , .5)
 			renormToBinWidth(imagsD[i], .5)
 			renormToBinWidth(imagsT[i], .5)
-
+			renormToBinWidth(correl[i],   )
 			allIsZero = True
 			for binX in range(intensT[i].GetNbinsX()):
 				for binY in range(intensT[i].GetNbinsY()):
@@ -364,11 +384,13 @@ def main(rhoFileName = ""):
 						allIsZero = False
 						break
 				if not allIsZero:
-					break # # # # # # # # # # # # # # # # # 
+					break # # # # # # # # # # # # # # # # #
+			ric = correl[i]
+ 
 			if not allIsZero:
-				rv = resultViewer([intenses[i], intensD[i], intensT[i]],[reals[i], realsD[i], realsT[i]],[imags[i], imagsD[i], imagsT[i]], [phases[i], phasesD[i], phasesT[i]])
+				rv = resultViewer([intenses[i], intensD[i], intensT[i]],[reals[i], realsD[i], realsT[i]],[imags[i], imagsD[i], imagsT[i]], [phases[i], phasesD[i], phasesT[i]], startBin = startBin, reImCorrel = ric)
 			else:
-				rv = resultViewer([intenses[i], intensD[i]],[reals[i], realsD[i]],[imags[i], imagsD[i]],[phases[i], phasesD[i]])
+				rv = resultViewer([intenses[i], intensD[i]],[reals[i], realsD[i]],[imags[i], imagsD[i]],[phases[i], phasesD[i]], startBin = startBin, reImCorrel = ric)
 			rv.run()
 
 if __name__ == "__main__":

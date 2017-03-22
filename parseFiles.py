@@ -23,7 +23,7 @@ def parseTH1D(fileName):
 		hist.SetBinError(  i+1, errs[i])
 	return hist
 
-def parseTGraph(fileName):
+def parseArgand(fileName, skipZero = False):
 	X  = []
 	EX = []
 	Y  = []
@@ -31,6 +31,8 @@ def parseTGraph(fileName):
 	with open(fileName, 'r') as inin:
 		for line in inin.readlines():
 			parsed = [float(v) for v in line.split()]
+			if skipZero and parsed[0] == 0. and parsed[1] == 0. and parsed[2] == 0. and parsed[3] == 0.:
+				continue
 			X.append(parsed[0])
 			EX.append(parsed[1])
 			Y.append(parsed[2])
@@ -39,6 +41,10 @@ def parseTGraph(fileName):
 	EX = np.asarray(EX, dtype = np.float64)
 	Y  = np.asarray(Y , dtype = np.float64)
 	EY = np.asarray(EY, dtype = np.float64)
+	return X,EX, Y,EY
+
+def parseTGraph(fileName):
+	X,EX,Y,EX = parseArgand(fileName, False)
 	graph = pyRootPwa.ROOT.TGraphErrors(len(X), X,Y,EX,EY)
 	return graph
 
