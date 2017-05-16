@@ -15,6 +15,8 @@ import modernplotting.colors
 import modernplotting.toolkit
 import modernplotting.specialPlots
 
+import LaTeX_strings
+
 
 def findMinBin(hist):
 	for i in range(0,hist.GetNbinsX()):
@@ -85,31 +87,31 @@ def getStdCmd():
 	print "21F: 2mp1mmF"
 	print "22 : 2mp2pp"
 	print "------------"
-	print "f  : Folder" 
+	print "f  : Folder"
 	mode = raw_input()
 	if mode == '00':
-		return ["", "./results/0mp0ppIntens.pdf", ["./results/0mp0pp_only0pp.intens", "./results/0mp0pp_only1mm.intens"], 
+		return ["", "./results/0mp0ppIntens.pdf", ["./results/0mp0pp_only0pp.intens", "./results/0mp0pp_only1mm.intens"],
 		            "./results/0mp0ppArgand.pdf", ["./results/0mp0pp_only0pp.argand", "./results/0mp0pp_only1mm.argand"]]
 	if mode == '01':
-		return ["", "./results/0mp1mmIntens.pdf", ["./results/0mp1mm_only0pp.intens", "./results/0mp1mm_only1mm.intens"], 
+		return ["", "./results/0mp1mmIntens.pdf", ["./results/0mp1mm_only0pp.intens", "./results/0mp1mm_only1mm.intens"],
 		            "./results/0mp1mmArgand.pdf", ["./results/0mp1mm_only0pp.argand", "./results/0mp1mm_only1mm.argand"]]
 	if mode == '10':
-		return ["", "./results/1pp0ppIntens.pdf", ["./results/1pp0pp_only0pp.intens", "./results/1pp0pp_only1mm.intens"], 
+		return ["", "./results/1pp0ppIntens.pdf", ["./results/1pp0pp_only0pp.intens", "./results/1pp0pp_only1mm.intens"],
 		            "./results/1pp0ppArgand.pdf", ["./results/1pp0pp_only0pp.argand", "./results/1pp0pp_only1mm.argand"]]
 	if mode == '11':
-		return ["", "./results/1pp1mmIntens.pdf", ["./results/1pp1mm_only0pp.intens","./results/1pp1mm_only0pp.intens"], 
+		return ["", "./results/1pp1mmIntens.pdf", ["./results/1pp1mm_only0pp.intens","./results/1pp1mm_only0pp.intens"],
 		            "./results/1pp1mmArgand.pdf", ["./results/1pp1mm_only0pp.argand", "./results/1pp1mm_only1mm.argand"]]
 	if mode == "20":
-		return ["", "./results/2mp0ppIntens.pdf", ["./results/2mp0pp_only0pp.intens","./results/2mp0pp_only1mmP.intens","./results/2mp0pp_only1mmF.intens","./results/2mp0pp_only2pp.intens"], 
+		return ["", "./results/2mp0ppIntens.pdf", ["./results/2mp0pp_only0pp.intens","./results/2mp0pp_only1mmP.intens","./results/2mp0pp_only1mmF.intens","./results/2mp0pp_only2pp.intens"],
 		            "./results/2mp0ppArgand.pdf", ["./results/2mp0pp_only0pp.argand","./results/2mp0pp_only1mmP.argand","./results/2mp0pp_only1mmF.argand","./results/2mp0pp_only2pp.argand"]]
 	if mode == "21P":
-		return ["", "./results/2mp1mmPIntens.pdf", ["./results/2mp1mmP_only0pp.intens","./results/2mp1mmP_only1mmP.intens","./results/2mp1mmP_only1mmF.intens","./results/2mp1mmP_only2pp.intens"], 
+		return ["", "./results/2mp1mmPIntens.pdf", ["./results/2mp1mmP_only0pp.intens","./results/2mp1mmP_only1mmP.intens","./results/2mp1mmP_only1mmF.intens","./results/2mp1mmP_only2pp.intens"],
 		            "./results/2mp1mmPArgand.pdf", ["./results/2mp1mmP_only0pp.argand","./results/2mp1mmP_only1mmP.argand","./results/2mp1mmP_only1mmF.argand","./results/2mp1mmP_only2pp.argand"]]
 	if mode == "21F":
-		return ["", "./results/2mp1mmFIntens.pdf", ["./results/2mp1mmF_only0pp.intens","./results/2mp1mmF_only1mmP.intens","./results/2mp1mmF_only1mmF.intens","./results/2mp1mmF_only2pp.intens"], 
+		return ["", "./results/2mp1mmFIntens.pdf", ["./results/2mp1mmF_only0pp.intens","./results/2mp1mmF_only1mmP.intens","./results/2mp1mmF_only1mmF.intens","./results/2mp1mmF_only2pp.intens"],
 		            "./results/2mp1mmFArgand.pdf", ["./results/2mp1mmF_only0pp.argand","./results/2mp1mmF_only1mmP.argand","./results/2mp1mmF_only1mmF.argand","./results/2mp1mmF_only2pp.argand"]]
 	if mode == "22":
-		return ["", "./results/2mp2ppIntens.pdf", ["./results/2mp2pp_only0pp.intens","./results/2mp2pp_only1mmP.intens","./results/2mp2pp_only1mmF.intens","./results/2mp2pp_only2pp.intens"], 
+		return ["", "./results/2mp2ppIntens.pdf", ["./results/2mp2pp_only0pp.intens","./results/2mp2pp_only1mmP.intens","./results/2mp2pp_only1mmF.intens","./results/2mp2pp_only2pp.intens"],
 		            "./results/2mp2ppArgand.pdf", ["./results/2mp2pp_only0pp.argand","./results/2mp2pp_only1mmP.argand","./results/2mp2pp_only1mmF.argand","./results/2mp2pp_only2pp.argand"]]
 	if mode == 'f':
 		folder   = raw_input("Folder:")
@@ -121,11 +123,11 @@ def getStdCmd():
 			if fn.endswith(suffix+".intens"):
 				intenses.append(ffn)
 			if fn.endswith(suffix+".argand"):
-				argands.append(ffn)			
+				argands.append(ffn)
 		return ["", "intens_"+folder+suffix+".pdf", intenses, "argands_"+folder+suffix+".pdf", argands]
 
 class resultViewer:
-	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 34, startCommand = "", reImCorrel = None):
+	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 34, startCommand = "", reImCorrel = None, noRun = False):
 		self.nHists       = len(intensHists)
 		if self.nHists < 1:
 			raise ValueError("No histograms given")
@@ -146,6 +148,8 @@ class resultViewer:
 		self.dataColor = modernplotting.colors.colorScheme.red
 		self.addiColor = modernplotting.colors.colorScheme.gray
 
+		self.lineArgs = {'marker': None, 'linestyle':'dashed', 'markersize':0, 'linewidth':.4, 'zorder' :0, 'color':'.5'}
+
 		self.plotCorr  = True
 		self.plotTheo  = True
 		self.plotData  = True
@@ -154,15 +158,22 @@ class resultViewer:
 		self.mMin = 0.27
 		self.mMax = 1.94
 
-		self.noRun = False
+		self.noRun = noRun
+
+		self.titleRight = ""
+		self.tString  = ""
+
+		self.tStringXpos = 0.015
+		self.tStringYpos = 0.93
+
 		if not startCommand == "":
 			if startCommand.startswith("wq:"):
 				fileName = startCommand[3:]
 				self.writeAmplFiles(self.bin, fileName = fileName)
 				self.noRun = True
 			else:
-				raise "Unknwon command '" + startCommand + "'" 
-			
+				raise "Unknwon command '" + startCommand + "'"
+
 		if not  self.noRun:
 			self.intensCanvas = pyRootPwa.ROOT.TCanvas("Intensity","Intensity")
 			self.sliceCanvas  = pyRootPwa.ROOT.TCanvas("IntensitySlice","IntensitySlice")
@@ -219,7 +230,7 @@ class resultViewer:
 				correl = self.reImCorrel.GetBinContent(      nBin + 1, i+1)
 				coma = [ [reR**2, correl],[correl, imR**2] ]
 				comas.append(coma)
-		return reals, imags, comas			
+		return reals, imags, comas
 
 	def getSlice(self, nBin, index = 0, mode = INTENS):
 		if index >= self.nHists:
@@ -340,10 +351,19 @@ class resultViewer:
 				XE = argand.GetErrorX(i)
 				YE = argand.GetErrorY(i)
 				out.write(str(X) + ' ' + str(XE) + ' ' + str(Y) + ' ' + str(YE) + '\n')
-		print "Written."
+#		print "Written."
+
+	def getLaTeXMassString(self, nBin):
+		mMin = self.intensHists[0].GetXaxis().GetBinLowEdge(nBin+1)
+		mMax = self.intensHists[0].GetXaxis().GetBinUpEdge(nBin+1)
+		retVal = LaTeX_strings.getMassString(mMin, mMax)
+		return retVal
 
 	def writeBinToPdf(self, nBin, stdCmd = None):
 		style = modernplotting.mpplot.PlotterStyle()
+		if not self.titleRight == "":
+			style.titleRight = self.titleRight
+
 		if stdCmd:
 			if not len(stdCmd) == 5:
 				raise IndexError("Wrond number of standard commands")
@@ -360,8 +380,9 @@ class resultViewer:
 				plot = style.getPlot2D()
 				modernplotting.root.plotTH2D(self.intensHists[0], plot, maskValue = 0.)
 				plot.setZlim((0., self.intensHists[0].GetMaximum()))
-				plot.setXlabel("\mThreePi [\SI{}{\GeVcc}]")
-				plot.setYlabel("\mTwoPi [\SI{}{\GeVcc}]")
+				plot.setXlabel(LaTeX_strings.m3Pi)
+				plot.setYlabel(LaTeX_strings.m2Pi)
+				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
 				pdfOutput.savefigAndClose()
 		if stdCmd:
 			slicePlotName = stdCmd[1]
@@ -381,6 +402,9 @@ class resultViewer:
 					break
 				else:
 					print "Invalid file name given: '" + slicePlotName + "'"
+
+		style.titleLeft = self.getLaTeXMassString(nBin)
+
 		if slicePlotName == "":
 			print "No name given, skipping the intensity slice"
 		else:
@@ -396,11 +420,13 @@ class resultViewer:
 					modernplotting.root.plotTH1D(hists[2], plot, markerDefinitions = { 'zorder':2, 'color': self.theoColor})
 				if self.plotCorr:
 					modernplotting.root.plotTH1D(hists[0], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':3, 'color':self.corrColor})
-				plot.setXlabel("$m_{\pi^-\pi^+} [\mathrm{GeV}/c^2]$")
-#				plot.setXlabel("Gande ubesande")
+				plot.setXlabel(LaTeX_strings.m3Pi)
 				plot.setXlim(self.mMin,self.mMax)
-				plot.setYlabel(pf.intens + ' ' + pf.AU)
+				plot.setYlabel(LaTeX_strings.intens)
+				plot.axes.yaxis.offsetText.set_position((-.15,1.))
 				plot.setYlim(0.,hists[0].GetMaximum()*1.2)
+				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
+
 				pdfOutput.savefigAndClose()
 		if stdCmd:
 			argandPlotName = stdCmd[3]
@@ -423,6 +449,7 @@ class resultViewer:
 					break
 				else:
 					print "Invalid file name: '" + argandPlotName + "'"
+
 		if argandPlotName == "":
 			print "No name given, skipping the argand plot"
 		else:
@@ -444,28 +471,35 @@ class resultViewer:
 					ranges = setAxesRange(argands[0])
 	#				ranges = getMaximumRanges(argands + addGraphs)
 	#				ranges = ((-500., 500.), (-500., 500.))
-					plot.setXlabel(pf.realPart + ' ' + pf.AU)
-					plot.setYlabel(pf.imagPart + ' ' + pf.AU)
+					plot.setXlabel(LaTeX_strings.real)
+					plot.setYlabel(LaTeX_strings.imag)
+					plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
 					plot.setXlim(ranges[0])
 					plot.setYlim(ranges[1])
 				else:
-					argandRanges = setAxesRange(self.getArgand(nBin, 0))
+					ranges = setAxesRange(self.getArgand(nBin, 0))
 					for fn in addFiles:
 						X,EX,Y,EY = parseArgand(fn, skipZero = True)
-						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 0, 'color':self.addiColor})
+						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 2, 'color':self.addiColor})
 					if self.plotData:
 						X,Y,COMA = self.getArgandData(nBin, 1, getCOMA = False)
-						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 1, 'color':self.dataColor})
+						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 2, 'color':self.dataColor})
 					if self.nHists > 2 and self.plotTheo:
 						X,Y,COMA = self.getArgandData(nBin, 2, getCOMA = False)
-						plot.plot(X, Y, **{'marker' : None, 'markersize' : 0., 'linestyle' : 'solid', 'linewidth' : .7,  'zorder' : 2, 'color': self.theoColor})
+						plot.plot(X, Y, **{'marker' : None, 'markersize' : 0., 'linestyle' : 'solid', 'linewidth' : .7,  'zorder' : 3, 'color': self.theoColor})
 					if self.plotCorr:
 						X,Y,COMA = self.getArgandData(nBin, 0, getCOMA = True)
-						modernplotting.specialPlots.plotErrorEllipses(plot, X, Y, COMA, markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 3, 'color' : self.corrColor})
-					plot.setXlabel(pf.realPart + ' ' + pf.AU)
-					plot.setYlabel(pf.imagPart + ' ' + pf.AU)
-					plot.setXlim(argandRanges[0])
-					plot.setYlim(argandRanges[1])
-				pdfOutput.savefigAndClose()					
+						modernplotting.specialPlots.plotErrorEllipses(plot, X, Y, COMA, markerDefinitions = {'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 1, 'color' : self.corrColor})
+						plot.plot(X,Y, **{'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 4, 'color' : self.corrColor})
+					plot.setXlabel(LaTeX_strings.real)
+					plot.setYlabel(LaTeX_strings.imag)
+					plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
+					plot.setXlim(ranges[0])
+					plot.setYlim(ranges[1])
+
+				plot.plot([ranges[0][0],ranges[0][1]],[0.,0.], **self.lineArgs)
+				plot.plot([0.,0.],[ranges[1][0],ranges[1][1]], **self.lineArgs)
+
+				pdfOutput.savefigAndClose()
 		print "Writing to .pdf finished."
 

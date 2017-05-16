@@ -65,7 +65,7 @@ class massBin:
 		self.nZero           =  0
 		self.zeroModes       = [ ]
 		self.zeroModeNumbers = [ ]
-		self.zeroModeTitles  = [ ] 
+		self.zeroModeTitles  = [ ]
 		self.zeroEigenvalues = [ ]
 		self.hasTheo         = False
 		self.hasMassRange    = False
@@ -106,7 +106,7 @@ class massBin:
 
 	def phaseChi2(self, pars):
 		return self.modeChi2(pars, PHASE)
-	
+
 	def intensChi2(self, pars):
 		return self.modeChi2(pars, INTENS)
 
@@ -270,7 +270,7 @@ class massBin:
 					A[2*(i+countNfunc)  ,2*(j+countNfunc)+1] += a[2*(self.nZero+i)  ,2*(self.nZero+j)+1].real
 					A[2*(i+countNfunc)+1,2*(j+countNfunc)  ] += a[2*(self.nZero+i)+1,2*(self.nZero+j)  ].real
 					A[2*(i+countNfunc)+1,2*(j+countNfunc)+1] += a[2*(self.nZero+i)+1,2*(self.nZero+j)+1].real
-			C += c			
+			C += c
 			countNfunc += nFunc
 		return A,B,C
 
@@ -308,7 +308,7 @@ class massBin:
 
 	def unifyComa(self):
 		for i in range(len(self.coma)):
-			for j in range(len(self.coma)):	
+			for j in range(len(self.coma)):
 				if i == j:
 					self.coma[i,j] = 1.
 					self.comaInv[i,j] = 1.
@@ -319,7 +319,7 @@ class massBin:
 
 	def makeComaInv(self):
 		self.comaInv = utils.pinv(self.coma, self.numLim)
-	
+
 
 	def removeZeroModeFromComa(self):
 		if len(self.zeroModes) == 0:
@@ -340,7 +340,7 @@ class massBin:
 		for i in range(self.totalBins):
 			retVal[2*i  ] = -self.imags[i]
 			retVal[2*i+1] =  self.reals[i]
-		
+
 		return normVector(retVal)
 
 	def removeGlobalPhaseFromComa(self):
@@ -370,7 +370,7 @@ class massBin:
 				continue
 			nFunc = self.nFuncs[s]
 			masses = self.binCenters[self.borders[s]:self.borders[s+1]]
-						
+
 
 			ampl = np.zeros((len(masses)), dtype = complex)
 			for i,f in enumerate(self.funcs[s]):
@@ -386,6 +386,11 @@ class massBin:
 						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
 							self.theo[b] = 0.+0.j
 		self.hasTheo = True
+
+	def writeAmplitudeAndArgandFile(self, params, outFileNameBase):
+		pass
+
+		
 
 	def writeZeroModeCoefficients(self, coefficients, outFileName, tBin = "<tBin>", mode = 'a'):
 		tBin  = str(tBin)
@@ -555,7 +560,7 @@ class massBin:
 				ampl = (params[2*(self.nZero + p)] + 1.j*params[2*(self.nZero + p)+1]) * funcs[p][bin] * self.norms[bin]**.5
 				deltas[2*bin  ] -= ampl.real
 				deltas[2*bin+1] -= ampl.imag
-			count += 1		
+			count += 1
 		return np.dot(deltas, np.dot(self.comaInv, deltas))
 
 	def smothnessChi2(self, other, params):
@@ -622,7 +627,7 @@ class massBin:
 						if ampl.imag > 0.:
 							jac[0] = -1./ampl.imag
 						else:
-							jac[0] = 1./ampl.imag
+							jac[0] =  1./ampl.imag
 					else:
 						common = 1. + ampl.imag**2/ampl.real**2
 						jac[0] = -ampl.imag/ampl.real**2/common
@@ -640,7 +645,7 @@ class massBin:
 				err = np.dot(jac, np.dot(coma,jac))**.5
 				hists[s].SetBinContent(self.bin3pi+1, count + 1, val)
 				hists[s].SetBinError(self.bin3pi+1, count + 1, err)
-				count += 1 
+				count += 1
 
 	def rotateToPhaseOfBin(self, nBin):
 		ampl = self.reals[nBin] - 1.j*self.imags[nBin]

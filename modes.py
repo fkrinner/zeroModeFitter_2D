@@ -27,3 +27,12 @@ class PHASETHEO:
 
 class REIMCORRELATION:
 	IS_THEO = False
+
+class AMPL:
+	IS_THEO = False
+
+class SMOOTH:
+	IS_THEO = False
+
+class NONE:
+	IS_THEO = False

@@ -12,51 +12,66 @@ import parameterizationClasses as pc
 import scipy.optimize
 from removeZeroModes import removeCertainZeroModes
 from fixedparameterizationPaths import getFileNameForSector
+from LaTeX_strings import getProperWaveName, getProperDataSet
 
 
 def main(rhoFileName = ""):
-#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
-#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_3pp.root"
+# # # #  Monte-Carlo results
+	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
+#	inFileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/ppppppppp/DpPiPiPi.root"
+# # # # Real-data results
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_three0pp.root"
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_bigger1pp.root"
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_exotic.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_bigger2pp.root"
-	inFileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/ppppppppp/DpPiPiPi.root"
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_bigger2mp.root"
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_3pp.root"
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_4pp.root"
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_4mp.root"
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_6mp.root"
+
+
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
 	sectors = ["Dp[pi,pi]0++PiS","Dp[pi,pi]1--PiP"]
-#	sectors = ["Dp[pi,pi]0++PiS","Dp[pi,pi]2++PiD"]
-#	sectors = ["Dp[pi,pi]1--PiP","Dp[pi,pi]2++PiD"]
-#	sectors = ["Dp[pi,pi]0++PiS","Dp[pi,pi]1--PiP","Dp[pi,pi]2++PiD"]
-#	sectors = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
-#	sectors = ["1++0+[pi,pi]0++PiP","1++0+[pi,pi]1--PiS"]
-#	sectors = ["2-+0+[pi,pi]0++PiD","2-+0+[pi,pi]1--PiP","2-+0+[pi,pi]1--PiF","2-+0+[pi,pi]2++PiS"]
-#	sectors = ["2-+0+[pi,pi]1--PiP"]
-#	sectors = ["2-+0+[pi,pi]0++PiD"]
-#	sectors = ["1-+1+[pi,pi]1--PiP"]
-#	sectors = ["1++0+[pi,pi]0++PiP"]
-#	sectors = ["2++1+[pi,pi]1--PiD"]
-#	sectors = ["0-+0+[pi,pi]0++PiS"]
-#	sectors = ["0-+0+[pi,pi]1--PiP"]
-#	sectors = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
-#	sectors = ["2-+0+[pi,pi]2++PiS"]
-#	sectors = ["2-+1+[pi,pi]1--PiP"]
-#	sectors = ["1++0+[pi,pi]1--PiS","1++0+[pi,pi]0++PiP"]
-#	sectors = ["1++1+[pi,pi]1--PiS"]
-#	sectors = ["1++0+[pi,pi]1--PiS"]
-#	sectors = ["3++0+[pi,pi]3--PiS"]
-#	sectors = ["3++0+[pi,pi]2++PiP"]
-#	sectors = ["3++0+[pi,pi]1--PiD"]
-#	sectors = ["3++0+[pi,pi]3--PiS","3++0+[pi,pi]2++PiP","3++0+[pi,pi]1--PiD"]
-#	sectors = ["4++1+[pi,pi]1--PiG", "4++1+[pi,pi]2++PiF"]
-#	sectors = ["2+q+1+[pi,pi]1--PiD","2++1+[pi,pi]2++PiP"]
+# # # # # Std11 Definitions
+	std11_0mp0p = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
+	std11_1pp0p = ["1++0+[pi,pi]0++PiP","1++0+[pi,pi]1--PiS"]
+	std11_1pp1p = ["1++1+[pi,pi]1--PiS"]
+	std11_2pp1p = ["2++1+[pi,pi]1--PiD"]
+	std11_2mp0p = ["2-+0+[pi,pi]0++PiD","2-+0+[pi,pi]1--PiP","2-+0+[pi,pi]1--PiF","2-+0+[pi,pi]2++PiS"]
+	std11_2mp1p = ["2-+1+[pi,pi]1--PiP"]
 
-#	sectors = [sectors[1]]
+# # # # # Bigger 1++ definitions
+#	sectors = std11_1pp0p + ["1++0+[pi,pi]1--PiD", "1++0+[pi,pi]2++PiP"]
+# # # # # Exotic (1-+)
+#	sectors = ["1-+1+[pi,pi]1--PiP"]
+# # # # # Bigger 2++ definitions
+#	sectors = std11_2pp1p + ["2++1+[pi,pi]2++PiP"]
+# # # # # Bigger 2-+ definitions
+#	sectors = std11_2mp0p + ["2-+0+[pi,pi]2++PiD"]
+#	sectors = std11_2mp1p + ["2-+1+[pi,pi]2++PiS"]
+# # # # # 3++
+#	sectors = ["3++0+[pi,pi]1--PiD", "3++0+[pi,pi]2++PiP", "3++0+[pi,pi]3--PiS"]
+# # # # # 4++ 
+#	sectors = ["4++1+[pi,pi]1--PiG", "4++1+[pi,pi]2++PiF"]
+# # # # # 4-+
+#	sectors = ["4-+0+[pi,pi]1--PiF"]
+# # # # # 6-+
+#	sectors = ["6-+0+[pi,pi]1--PiH"]
+
+	sectors = std11_1pp1p
+#	sectors = std11_2mp1p
+#	sectors = std11_2pp1p
 
 	doSpecialOneBinFit = -15 # negative values turn it off
 
 	sectorUseMap = { # Defines, if for the given sector a theory curve will be used
-		"0-+0+[pi,pi]0++PiS" : False,
+		"0-+0+[pi,pi]0++PiS" : True,
 		"0-+0+[pi,pi]1--PiP" : True,
-		"1++0+[pi,pi]0++PiP" : False, 
+		"1++0+[pi,pi]0++PiP" : True, 
 		"1++0+[pi,pi]1--PiS" : True, 
-		"2-+0+[pi,pi]0++PiD" : False, 
+		"2-+0+[pi,pi]0++PiD" : True, 
 		"2-+0+[pi,pi]1--PiP" : True, 
 		"2-+0+[pi,pi]1--PiF" : True, 
 		"2-+0+[pi,pi]2++PiS" : True
@@ -72,13 +87,16 @@ def main(rhoFileName = ""):
 #			sectorRangeMap[sector] = (0.,.94)
 
 	tBin             = 0
-	startBin         = 34
-	stopBin          = 35
-#	startBin         = 15
-#	stopBin          = 50
+#	startBin         = 34
+#	stopBin          = 35
+#	startBin         = 25
+#	stopBin          = 26
+	startBin         = 0
+	stopBin          = 50
 	polynomialDegree = 0
-#	modelMode        = "
-	modelMode        = "simpleBW_Dp"
+	modelMode        = "fixedShapes"
+#	modelMode        = "none"
+#	modelMode        = "simpleBW_Dp"
 #	modelMode        = "BW"
 #	modelMode        = "explicitRhoFile"
 	useSmooth        = False
@@ -153,6 +171,14 @@ def main(rhoFileName = ""):
 		for sector in sectors:
 			if '1--' in sector:
 				waveModel[sector] = [param]
+
+	elif modelMode == "none":
+		waveModel = {}
+		for sector in sectors:
+			waveModel[sector] = []
+
+	else:
+		raise RuntimeError("modelMode: '" + modelMode + "' is unknown")
 
 	with root_open(inFileName, "READ") as inFile:
 		histNames = GetKeyNames(inFile)
@@ -252,7 +278,7 @@ def main(rhoFileName = ""):
 
 			sys.exit(0)
 
-		if not useSmooth and not phaseFit:
+		if not useSmooth and not phaseFit and not modelMode == "none":
 			ab.initChi2(waveModel)
 			ab.setMassRanges(sectorRangeMap)
 			totalPars = []
@@ -275,6 +301,14 @@ def main(rhoFileName = ""):
 		elif not phaseFit:
 			A,B,C   =  ab.getSmoothnessABC()
 			paramsZ = -np.dot(la.inv(A + np.transpose(A)), B)
+
+		if modelMode == 'none':
+			ab.initChi2(waveModel)
+			params = []
+			for mb in ab.massBins:
+				params.append([0.]*mb.nFunc*2)
+				
+			ab.setTheoryFromOwnFunctions(params, True)
 
 #		for i in range(len(paramsZ)):
 #			paramsZ[i] = 0.
@@ -391,6 +425,8 @@ def main(rhoFileName = ""):
 				rv = resultViewer([intenses[i], intensD[i], intensT[i]],[reals[i], realsD[i], realsT[i]],[imags[i], imagsD[i], imagsT[i]], [phases[i], phasesD[i], phasesT[i]], startBin = startBin, reImCorrel = ric)
 			else:
 				rv = resultViewer([intenses[i], intensD[i]],[reals[i], realsD[i]],[imags[i], imagsD[i]],[phases[i], phasesD[i]], startBin = startBin, reImCorrel = ric)
+			rv.titleRight = getProperWaveName(intenses[i].GetTitle().split("_")[0])
+			rv.tString    = getProperDataSet(inFileName, tBin)
 			rv.run()
 
 if __name__ == "__main__":

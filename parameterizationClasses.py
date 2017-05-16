@@ -345,6 +345,7 @@ class fixedParameterization:
 			else:
 				self._parNames.append("c"+str(i+1))
 		self._parameters = [0.]*self.nPar
+		self.parameters  = [0.]*self.nPar
 		self.m,self.r,self.i = loadAmplitudeFile(self.ampFileName)
 
 	def lookupValue(self, m):

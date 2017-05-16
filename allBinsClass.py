@@ -1,7 +1,7 @@
 from massBinClass import massBin
 import numpy as np
 import numpy.linalg as la
-from modes import INTENS
+from modes import INTENS, PHASE
 
 
 class allBins:
@@ -21,6 +21,40 @@ class allBins:
 		for mb in self.massBins:
 			mb.initChi2(sectorFuncMap)
 		self.chi2init = True
+
+	def __getitem__(self, index):
+		if index < 0 or index >= len(self.massBins):
+			raise IndexError("Invalud index in allBins.__getitem__(" + str(index) + ")")
+		return self.massBins[index]
+
+	def __len__(self):
+		return len(self.massBins)
+
+	def modeChi2(self, pars, mode = PHASE):
+		if not len(pars) == self.nParAll():
+			print len(pars) , self.nParAll()
+			raise IndexError("Number of parameters does not match")
+		chi2  = 0.
+		count = 0
+		nPar  = self.massBins[0].nPar
+		nNon  = 2*(self.massBins[0].nZero + self.massBins[0].nFunc)
+		for i, mb in enumerate(self.massBins):
+			par    = pars[count:count+nNon]
+			if nPar > 0:
+				par += pars[-nPar:]
+			chi2  += mb.modeChi2(par, mode = mode)
+			count += nNon
+		return chi2
+
+	def nPar(self):
+		return self.massBins[0].nPar
+
+	def nParAll(self):
+		nPar = 0
+		for mb in self.massBins:
+			nPar += 2*mb.nZero + 2*mb.nFunc
+		nPar += mb.nPar
+		return nPar
 
 	def chi2(self, shapeParams = [], returnParameters = False):
 		if not self.chi2init:
@@ -142,7 +176,7 @@ class allBins:
 		if len(coefficients) == nZero:
 			cmplx = True
 		elif not len(coefficients) == 2*nZero:
-			raise IndexError("Number of coefficients for "+str(self.nZero)+" modes does not match (netiher real nor complex): " +str(len(coefficients)))
+			raise IndexError("Number of coefficients for "+str(self.nZero)+" modes does not match (neither real nor complex): " +str(len(coefficients)))
 		tBin  = str(tBin)		
 		count = 0
 		for mb in self.massBins:

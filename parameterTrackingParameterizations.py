@@ -37,6 +37,153 @@ class PRparameter:
 
 		return retVal
 
+def loadAmplitudeFile(ampFileName):
+	masses = []
+	reals  = []
+	imags  = []
+	with open(ampFileName, 'r') as inin:
+		for line in inin.readlines():
+			chunks = line.split()
+			masses.append(float(chunks[0]))
+			reals.append(float(chunks[1]))
+			imags.append(float(chunks[2]))
+	return np.asarray(masses), np.asarray(reals), np.asarray(imags)
+
+OMNES_LOADED = False
+def loadOmnes():
+	global OMNES_LOADED
+	global S_OMNES
+	global R_OMNES
+	global I_OMNES
+	omnesFileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/zeroModeFitter_2D/Omnes11_new.dat"
+	if OMNES_LOADED:
+		print "Omnes function already loaded"
+	else:
+		S_OMNES, R_OMNES, I_OMNES = loadAmplitudeFile(omnesFileName)
+	OMNES_LOADED = True
+	
+def lookupOmnes(s):
+	if not OMNES_LOADED:
+		loadOmnes()
+	for i in range(len(S_OMNES) - 1):
+		if S_OMNES[i] > s and S_OMNES[i+1] >= s:
+			x = (s - S_OMNES[i])/(S_OMNES[i+1] - S_OMNES[i])
+			return (R_OMNES[i] + 1.j * I_OMNES[i])*(1-x) + (R_OMNES[i+1] + 1.j * I_OMNES[i+1])*x
+	print "No lookup value found for s =",s
+	return 0.+0.j
+
+class omnesFunctionPolynomial:
+	"""
+	Omnes polynomial allows to set parameters to real. For complex coefficients it it more efficient to use monomials
+	"""
+	def __init__(self, parameters, nDimPol = 0, shift = True, stretch = True, complexPolynomial = False):
+		# Since a complex factor will be mutliplied in the fit, set c0 = 1., then:
+		# c0 + c1 m + c2 m**2 + ... + cn m**n -> 1. + c1 m + ... + cn m**n
+		self.complexPolynomial = complexPolynomial
+		self.polDeg = nDimPol
+		if complexPolynomial:
+			self.nParAll = 2 * nDimPol
+		else:
+			self.nParAll = nDimPol
+		self.shift = shift
+		if shift:
+			self.nParAll += 1
+		self.stretch = stretch
+		if stretch:
+			self.nParAll += 1
+		if not len(parameters) == self.nParAll:
+			raise IndexError("Number of parameters does not match")
+		self.loadMap = []
+		self.nPar    = 0
+		self.parameters = parameters
+		for p in self.parameters:
+			if not p.lock:
+				self.loadMap.append(True)
+				self.nPar += 1
+				p.lock = True
+			else:
+				self.loadMap.append(False)
+
+	def __call__(self, ms, externalKinematicVariables = []):
+		par = [p.value for p in self.parameters]
+		if not len(par) == self.nParAll:
+			raise IndexError("omnesFunctionPolynomial: Wrong number of parameters")
+		retVals = np.zeros((len(ms)), dtype = complex)
+		for i,m in enumerate(ms):
+			skip = 0
+
+			s = m**2
+			x = s
+#			print s,'+',
+			if self.shift:
+#				print par[skip],'=',
+				s += par[skip]
+#				print s,
+				skip += 1
+			if self.stretch:
+#				print 
+				s *= par[skip]
+				skip += 1
+
+			poly = 1.
+			for d in range(self.polDeg):
+				if self.complexPolynomial:
+					poly += x * (par[2*d+skip] + 1.j*par[2*d+1+skip])
+				else:
+					poly += x * par[d+skip]
+				x *= s
+			retVals[i] = poly * lookupOmnes(s)
+		return retVals
+
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+		count = 0
+		for i,v in enumerate(self.loadMap):
+			if v:
+				self.parameters[i].value = params[count]
+				count += 1
+
+	def setParametersAndErrors(self, params, errors):
+		if not len(errors) == self.nPar:
+			print "Number of errors does not match"
+			return False
+		if not len(params) == self.nPar:
+			print "Number of parameters does not match"
+			return False
+		count = 0
+		for i,v in enumerate(self.loadMap):
+			if v:
+				self.parameters[i].value = params[count]
+				self.parameters[i].error = errors[count]
+				count += 1
+		return True
+
+	def getParameters(self):
+		retVal = []
+		for i,v in enumerate(self.loadMap):
+			if v:
+				retVal.append(self.parameters[i].value)
+		return retVal
+
+class fixedParameterization:
+	def __init__(self, path):
+		self.path       = path
+		self.parameters = []
+		self.nPar       = 0
+	
+	def __call__(self, ms, externalKinematicVariables = []):
+		retVals = np.zeros((len(ms)), dtype = complex)
+		for i in range(len(retVals)):
+			retVals[i] = 1.
+		return retVals
+
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+
+	def getParameters(self):
+		return []
 
 class relativisticBreitWigner:
 	def __init__(self, parameters, m1, m2, m3, J, L, fitPr = False):

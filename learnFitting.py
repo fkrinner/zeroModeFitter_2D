@@ -20,10 +20,10 @@ def main(rhoFileName = ""):
 #	sectors = ["4++1+[pi,pi]1--PiG", "4++1+[pi,pi]2++PiF"]
 #	sectors = ["4++1+[pi,pi]1--PiG"]
 #	sectors = ["4++1+[pi,pi]2++PiF"]
-#	sectors = ["1++0+[pi,pi]1--PiS"]
+	sectors = ["1++0+[pi,pi]1--PiS"]
 #	sectors = ["2++1+[pi,pi]1--PiD"]
 #	sectors = ["2-+0+[pi,pi]2++PiS"]
-	sectors = ["2-+0+[pi,pi]2++PiS","4++1+[pi,pi]2++PiF" ]
+#	sectors = ["2-+0+[pi,pi]2++PiS","4++1+[pi,pi]2++PiF" ]
 #	sectors = ["0-+0+[pi,pi]1--PiP"]
 #	sectors = ["1++0+[pi,pi]1--PiS", "2++1+[pi,pi]1--PiD", "4++1+[pi,pi]1--PiG", "4++1+[pi,pi]2++PiF"]
 	sectorRangeMap = {}
@@ -34,7 +34,7 @@ def main(rhoFileName = ""):
 		if '2++' in sector:
 			pass
 
-	tBins            = [0,1,2,3]
+	tBins            = [0]#,1,2,3]
 	startBin         = 20
 	stopBin          = 50
 
@@ -63,30 +63,58 @@ def main(rhoFileName = ""):
 	PrRho = ptc.PRparameter( Pr0, "PrRho")
 	PrF2  = ptc.PRparameter( Pr0, "PrF2" )
 
-	allParameters = []
-	waveModel     = {}
-	PrMap = { "4++1+" : PrA4, "2++1+" : PrA2, "1++0+": PrA1, "2-+0+": PrPi2 }
+	omnesParameters = []
+
+	shift   = True
+	stretch = True
+
+	compl            = True
+	polyNomialDegree = 1	
+
+	omnesShift       = ptc.parameter( 0., "shift"  )
+	omnesStretch     = ptc.parameter( 1., "stretch")
+
+
+
+	if shift:
+		omnesParameters.append(omnesShift)
+	if stretch:
+		omnesParameters.append(omnesStretch)
+	for i in range(polyNomialDegree):
+		if compl:
+			omnesParameters.append(ptc.parameter(0., "cRe_"+str(i+1)))
+			omnesParameters.append(ptc.parameter(0., "cIm_"+str(i+1)))
+		else:
+			omnesParameters.append(ptc.parameter(0., "c_"+str(i+1)))
+
+	omnes = ptc.omnesFunctionPolynomial(omnesParameters, nDimPol = polyNomialDegree, shift = shift, stretch = stretch, complexPolynomial = compl)
+
+	waveModel = {}
+	PrMap     = { "4++1+" : PrA4, "2++1+" : PrA2, "1++0+": PrA1, "2-+0+": PrPi2 }
+
+	allParameters = omnesParameters
 
 	for sector in sectors:
-		L     = LtoInt(sector[-1])
-		JPC   = sector[:5]
-		Pr3Pi = PrMap[JPC]
-		if ']1--' in sector:
-			rhoParameters = [rhoMass, rhoWidth]
-			if fitPr:
-				rhoParameters.append(Pr3Pi)
-				rhoParameters.append(PrRho)
-			rho = ptc.relativisticBreitWigner(rhoParameters, mPi, mPi, mPi, 1, L, fitPr)
-			allParameters += rhoParameters
-			waveModel[sector] = [rho]
-		elif "]2++" in sector:
-			f2Parameters = [f2Mass, f2Width]
-			if fitPr:
-				f2Parameters.append(Pr3Pi)
-				f2Parameters.append(PrF2)
-			f2 = ptc.relativisticBreitWigner(f2Parameters, mPi, mPi, mPi, 2, L, fitPr)
-			allParameters += f2Parameters
-			waveModel[sector] = [f2]
+#		L     = LtoInt(sector[-1])
+#		JPC   = sector[:5]
+#		Pr3Pi = PrMap[JPC]
+#		if ']1--' in sector:
+#			rhoParameters = [rhoMass, rhoWidth]
+#			if fitPr:
+#				rhoParameters.append(Pr3Pi)
+#				rhoParameters.append(PrRho)
+#			rho = ptc.relativisticBreitWigner(rhoParameters, mPi, mPi, mPi, 1, L, fitPr)
+#			allParameters += rhoParameters
+#			waveModel[sector] = [rho]
+#		elif "]2++" in sector:
+#			f2Parameters = [f2Mass, f2Width]
+#			if fitPr:
+#				f2Parameters.append(Pr3Pi)
+#				f2Parameters.append(PrF2)
+#			f2 = ptc.relativisticBreitWigner(f2Parameters, mPi, mPi, mPi, 2, L, fitPr)
+#			allParameters += f2Parameters
+#			waveModel[sector] = [f2]
+		waveModel[sector] = [omnes]
 
 	totalModel = tBinHolder()
 

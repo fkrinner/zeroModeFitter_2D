@@ -2,6 +2,7 @@ import numpy as np
 import numpy.linalg as la
 
 numLim = 1.E-10
+INF = float("inf")
 
 def getNDp(sector):
 	nDpfile = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/ppppppppp/build/nDp.dat"
@@ -124,5 +125,52 @@ def getZeroModeNumber(hist):
 		raise NameError("'" + name + "' is not the name of a zeroMode histogram")
 	return int(name.split('_')[0][4:])
 
+def sumUp(ll):
+	if hasattr(ll, '__len__'):
+		summ = 0.
+		for l in ll:
+			summ += sumUp(l)
+		return summ
+	return ll
 
+def cloneZeros(lst):
+	retVal = []
+	for val in lst:
+		if hasattr(val, '__len__'):
+			retVal.append(cloneZeros(val))
+		else:
+			retVal.append(0.)
+	return retVal
+
+def fillAwithB(A,B, weight = 1.):
+	if not len(A) == len(B):
+		raise ValueError("fillAwithB(...): Size mismatch ('" + str(len(A)) + "' != '" + str(len(B)) + "')" )
+	for i in range(len(A)):
+		if hasattr(A[i], '__len__'):
+			fillAwithB(A[i],B[i], weight)
+		else:
+			A[i] += weight*B[i]
+
+def weightedSum(weights, params):
+	if len(params) == 0:
+		return []
+	for m in weights:
+		retVal = cloneZeros(params[m])
+		break
+	for m in weights:
+		fillAwithB(retVal, params[m], weights[m])
+	return retVal
+
+def main():
+	lst = [[[1,2,3],[1,2]],[1,2,3]]
+	zers =  cloneZeros(lst)
+	weight = 2
+	fillAwithB(zers, lst, weight)
+	fillAwithB(zers, lst)
+	print zers
+
+if __name__ == "__main__":
+	main()
+
+	
 
