@@ -6,6 +6,9 @@ from modes import INTENS, PHASE
 
 class allBins:
 	def __init__(self, binStart, binStop, realHists, imagHists, normHists, indexHists, comaHistList):
+		"""
+		Initializes the allBins class
+		"""
 		self.binStart = binStart
 		self.binStop  = binStop
 		if not binStop - binStart == len(comaHistList):
@@ -18,23 +21,38 @@ class allBins:
 		self.chi2init = False
 
 	def initChi2(self, sectorFuncMap):
+		"""
+		Initializes the chi2 function by setting the corresponting functions in all mass bins
+		"""
 		for mb in self.massBins:
 			mb.initChi2(sectorFuncMap)
 		self.chi2init = True
 
 	def __getitem__(self, index):
+		"""
+		Enables looping through mass bins
+		"""
 		if index < 0 or index >= len(self.massBins):
 			raise IndexError("Invalud index in allBins.__getitem__(" + str(index) + ")")
 		return self.massBins[index]
 
 	def __len__(self):
+		"""
+		Enables usage of the 'len(...)' method
+		"""
 		return len(self.massBins)
 
-	def modeChi2(self, pars, mode = PHASE):
+	def modeChi2(self, pars, mode = PHASE, mBinResolved = False):
+		"""
+		Evaluates a chi2 for a specific mode, other than the amplitude (PHASE or INTENS), summed over all mass bins
+		"""
 		if not len(pars) == self.nParAll():
 			print len(pars) , self.nParAll()
 			raise IndexError("Number of parameters does not match")
-		chi2  = 0.
+		if mBinResolved: 
+			chi2 = []
+		else:
+			chi2  = 0.
 		count = 0
 		nPar  = self.massBins[0].nPar
 		nNon  = 2*(self.massBins[0].nZero + self.massBins[0].nFunc)
@@ -42,14 +60,24 @@ class allBins:
 			par    = pars[count:count+nNon]
 			if nPar > 0:
 				par += pars[-nPar:]
-			chi2  += mb.modeChi2(par, mode = mode)
+			binC2 = mb.modeChi2(par, mode = mode)
+			if mBinResolved:
+				chi2.append(binC2)
+			else:
+				chi2 += binC2
 			count += nNon
 		return chi2
 
 	def nPar(self):
+		"""
+		Gets the number of shape parameters (assumes to be the same in all mass bins)
+		"""
 		return self.massBins[0].nPar
 
 	def nParAll(self):
+		"""
+		Gets the total number of parameters (Makes no asusmptions)
+		"""
 		nPar = 0
 		for mb in self.massBins:
 			nPar += 2*mb.nZero + 2*mb.nFunc
@@ -57,6 +85,9 @@ class allBins:
 		return nPar
 
 	def chi2(self, shapeParams = [], returnParameters = False):
+		"""
+		Evalueates the chi2 for the AMPL method. Non-shape parameters are calculated. If no shape parameters are given, the internally sotred ones are used.
+		"""
 		if not self.chi2init:
 			raise RuntimeError("Chi2 not initialized, cannot evaluate")
 		chi2 = 0.
@@ -75,6 +106,9 @@ class allBins:
 			return chi2
 
 	def setParametersAndErrors(self, parameters, errors):
+		"""
+		Sets the internal parameters (and their uncertainties) 
+		"""
 		if not self.chi2init:
 			raise RuntimeError("Chi2 not initialized, cannot set errors")
 		for mb in self.massBins:
@@ -84,32 +118,53 @@ class allBins:
 		return True
 
 	def addZeroMode(self, borders, zeroMode, eigenvalueHist = None):
+		"""
+		Adds a zero-mode (Simple mass bin loop)
+		"""
 		for mb in self.massBins:
 			mb.addZeroMode(borders, zeroMode, eigenvalueHist = None)
 
 	def renormZeroModes(self):
+		"""
+		Renorms zero modes (Simple mass bin loop)
+		"""
 		for mb in self.massBins:
 			mb.renormZeroModes()
 
 	def removeGlobalPhaseFromComa(self):
+		"""
+		Removes the dorection of a gobal phase rotation from the covariance matrix (Simple mass bin loop)
+		"""
 		for mb in self.massBins:
 			mb.removeGlobalPhaseFromComa()
 
 	def setMassRanges(self, massRanges):
+		"""
+		Sets the mass ranges for the evaluation of chi2 estimators (Simple mass bin loop)
+		"""
 		for mb in self.massBins:
 			mb.setMassRanges(massRanges)
 
 	def nZero(self):
+		"""
+		Gives the total number of zero modes, summed over all mass bins
+		"""
 		nZero = 0
                 for mb in self.massBins:
                         nZero += mb.nZero
 		return nZero
 
 	def unifyComa(self):
+		"""
+		Sets the covariance matrices to unity (Simple mass bin loop)
+		"""
 		for mb in self.massBins:
 			mb.unifyComa()
 
 	def setTheory(self, sectParsFunctMap):
+		"""
+		Sets internally evaluated theory curves (Simple mass bin loop). If shape paramerers are given, these are used, otherwise the internally stored ones.
+		"""
 		for i, mb in enumerate(self.massBins):
 			spfm = {}
 			for s in sectParsFunctMap:
@@ -125,6 +180,9 @@ class allBins:
 			mb.setTheory(spfm)
 
 	def setTheoryFromOwnFunctions(self, parameterLists, skipZeroPars = True, restrictToRange = True):
+		"""
+	Sets internally evaluated theory curves from set functions
+		"""
 		if not self.chi2init:
 			raise RuntimeError("Chi2 not inited, cannot set theory")
 		if not len(parameterLists) == len(self.massBins):
@@ -137,6 +195,9 @@ class allBins:
 				mb.setTHeoryFromOwnFunctions(parameterLists[i], restrictToRange = restrictToRange)
 
 	def linearizeZeroModeParameters(self, pars):
+		"""
+		Prduces a 1D array from a 2D array of zero mode parameters
+		"""
 		if not len(pars) == len(self.massBins):
 			raise ValueError("Number of parameters do not match")
 		nZero   = self.nZero()
@@ -151,6 +212,9 @@ class allBins:
 		return linPars
 
 	def getSmoothnessABC(self):
+		"""
+		Retuns the A, B and C of the smoothness method, wehere: chi2(p) = pAp + Bp + C
+		"""
 		nZero = self.nZero()
 		C = 0.
 		B = np.zeros((2*nZero))
@@ -171,6 +235,9 @@ class allBins:
 		return A,B,C
 
 	def writeZeroModeCoefficients(self, coefficients, outFileName, tBin = "<tBin>"):
+		"""
+		Writes the zero mode coefficients to a text file (Simple mass bin loop)
+		"""
 		nZero = self.nZero()
 		cmplx = False
 		if len(coefficients) == nZero:
@@ -187,16 +254,25 @@ class allBins:
 			count += nn
 
 	def printNzero(self):
+		"""
+		Prins the numbers of zero modes in all bins
+		"""
 		nZeros = []
 		for mb in self.massBins:
 			nZeros.append(mb.nZero)
 		print nZeros
 
 	def removeZeroModeFromComa(self):
+		"""
+		Removes the direction of a shift in the zero mode direction from the covariance matrix (Simple mass bin loop)
+		"""
 		for mb in self.massBins:
 			mb.removeZeroModeFromComa()
 
 	def smothnessChi2(self,params):
+		"""
+		Gives the chi2 for the smoothness method
+		"""
 		countZero = 0
 		chi2 = 0.
 		for i in range(self.binStop - self.binStart - 1 ):
@@ -205,10 +281,16 @@ class allBins:
 		return chi2
 
 	def rotateToPhaseOfBin(self, nBin):
+		"""
+		Rotates the global phase, that the phase of nBin is (Simple mass bin loop)
+		"""
 		for mb in self.massBins:
 			mb.rotateToPhaseOfBin(nBin)
 
 	def fillHistograms(self, params, hists, mode = INTENS):
+		"""
+		Fills 2D histograms
+		"""
 		parCount = 0
 		for mb in self.massBins:
 			nz = 2*mb.nZero

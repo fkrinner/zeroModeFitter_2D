@@ -18,7 +18,7 @@ def makeStringArray(hist2D):
 	return retVal
 
 def makeValuePlot(plot, hist2D):
-	modernplotting.root.plotTH2D(hist2D, plot, maskValue = 0.)
+	modernplotting.root.plotTH2D(hist2D, plot)#, maskValue = 0.)
 	stringArray = makeStringArray(hist2D)
 #	modernplotting.specialPlots.plotValueString(plot, stringArray, fontsize = 8, fontweight='bold', color = 'w')
 	modernplotting.specialPlots.plotValueString(plot, stringArray, fontsize = 8)

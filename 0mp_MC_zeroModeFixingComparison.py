@@ -95,11 +95,12 @@ def weightedParametersSum(evl, selfEvl, params):
 	return weightedSum(weights, params)
 
 def main():
-	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
+	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
 	sectors          = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
 	tBins            = [0]
 	startBin         = 10
-	stopBin          = 20
+	stopBin          = 50
 
 	allMethods       = {}
 
@@ -128,10 +129,10 @@ def main():
 	allMethods["fixedShapes"] = fixedShapes
 	print "Finished with fixed shapes"
 
-#	print "Starting with phase"
-#	fitPiPiSshape = doF0phase(inFileName, sectors[:1], startBin, stopBin, tBins)
-#	allMethods["pipiS"] = fitPiPiSshape
-#	print "Finished with phase"
+	print "Starting with phase"
+	fitPiPiSshape = doF0phase(inFileName, sectors[:1], startBin, stopBin, tBins)
+	allMethods["pipiS"] = fitPiPiSshape
+	print "Finished with phase"
 
 	print "Starting with fitting restricted rho (1 Gamma)"
 	fitRho1G = doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]1--PiP":(mRho - Grho, mRho+Grho)})
@@ -143,10 +144,11 @@ def main():
 	allMethods["fitRho2G"] = fitRho2G
 	print "Finished with fitting restricted rho (2 Gammas)"
 
-	print "Starting with smooth"
-	smooth = doSmooth(inFileName, sectors, startBin, stopBin, tBins)
-	allMethods["smooth"] = smooth
-	print "Finished with smooth"
+	if stopBin - startBin > 1:
+		print "Starting with smooth"
+		smooth = doSmooth(inFileName, sectors, startBin, stopBin, tBins)
+		allMethods["smooth"] = smooth
+		print "Finished with smooth"
 
 	fileNames = {}
 
@@ -193,13 +195,14 @@ def main():
 
 	style = modernplotting.mpplot.PlotterStyle()
 #	style.p2dColorMap = 'ocean_r'
-	style.p2dColorMap = 'YlOrRd'
+#	style.p2dColorMap = 'YlOrRd'
+	style.p2dColorMap = 'Reds'
 	axolotl = []
 	for i in range(len(studyList)):
 		axolotl.append(alphapet[i])
 #		axolotl.append('')
 
-	with modernplotting.toolkit.PdfWriter("studies.pdf") as pdfOutput:
+	with modernplotting.toolkit.PdfWriter("studies_0mp.pdf") as pdfOutput:
 		plot = style.getPlot2D()
 		plot.axes.get_xaxis().set_ticks([])
 		plot.axes.get_yaxis().set_ticks([])
@@ -215,9 +218,9 @@ def main():
 
 		pdfOutput.savefigAndClose()
 
-	for s, sect in enumerate(allMethods['smooth'].sectors):
-		allMethods['smooth'].removeGlobalPhaseFromComa()
-		rv = allMethods['smooth'].produceResultViewer(weightedSum,s, noRun = True)
+	for s, sect in enumerate(allMethods['fixedShapes'].sectors):
+		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
+		rv = allMethods['fixedShapes'].produceResultViewer(weightedSum,s, noRun = True)
 		rv.writeBinToPdf(startBin, stdCmd = ["./comparisonResults/" + sect + "_MC_2D.pdf", "", [], "", []])
 		for b in range(startBin, stopBin):
 			intensNames = [name+".intens" for name in fileNames[sect,b]]
