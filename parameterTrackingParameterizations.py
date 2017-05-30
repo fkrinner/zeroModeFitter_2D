@@ -185,6 +185,61 @@ class fixedParameterization:
 	def getParameters(self):
 		return []
 
+class breitWigner:
+	def __init__(self, parameters):
+		self.nPar       = 0
+		self.nParAll    = 2
+		self.loadMap    = []
+		self.parameters = parameters
+		if not len(parameters) == self.nParAll:
+			raise IndexError("Number of parameters does not match (" + str(len(parameters))+"/"+str(self.nParAll)+")")
+		for p in parameters:
+			if not p.lock:
+				self.loadMap.append(True)
+				self.nPar += 1
+				p.lock = True
+			else:
+				self.loadMap.append(False)
+	def __call__(self, ms, externalKinematicVariables = []):
+		par = [p.value for p in self.parameters]
+		retVals = np.zeros((len(ms)), dtype = complex)
+		num = par[0]*par[1]
+		den = par[0]**2 - 1.j * par[0] * par[1]
+		for i, m in enumerate(ms):
+			retVals[i] = num/(den - m**2)
+		return retVals
+
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+		count = 0
+		for i,v in enumerate(self.loadMap):
+			if v:
+				self.parameters[i].value = params[count]
+				count += 1
+
+	def setParametersAndErrors(self, params, errors):
+		if not len(errors) == self.nPar:
+			print "Number of errors does not match"
+			return False
+		if not len(params) == self.nPar:
+			print "Number of parameters does not match"
+			return False
+		count = 0
+		for i,v in enumerate(self.loadMap):
+			if v:
+				self.parameters[i].value = params[count]
+				self.parameters[i].error = errors[count]
+				count += 1
+		return True
+
+	def getParameters(self):
+		retVal = []
+		for i,v in enumerate(self.loadMap):
+			if v:
+				retVal.append(self.parameters[i].value)
+		return retVal
+
 class relativisticBreitWigner:
 	def __init__(self, parameters, m1, m2, m3, J, L, fitPr = False):
 		self.L            = L

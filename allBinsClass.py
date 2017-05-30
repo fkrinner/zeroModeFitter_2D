@@ -68,6 +68,15 @@ class allBins:
 			count += nNon
 		return chi2
 
+	def getNDF(self):
+		"""
+		Return NDF as list of (NDF, 2*nZero, 2*nFunc, nPar) (Simple mass bin loop)
+		"""
+		retVal = []
+		for mb in self.massBins:
+			retVal.append(mb.getNDF())
+		return retVal
+
 	def nPar(self):
 		"""
 		Gets the number of shape parameters (assumes to be the same in all mass bins)
@@ -181,18 +190,18 @@ class allBins:
 
 	def setTheoryFromOwnFunctions(self, parameterLists, skipZeroPars = True, restrictToRange = True):
 		"""
-	Sets internally evaluated theory curves from set functions
+		Sets internally evaluated theory curves from set functions
 		"""
 		if not self.chi2init:
 			raise RuntimeError("Chi2 not inited, cannot set theory")
 		if not len(parameterLists) == len(self.massBins):
-			raise ValueError("Number of parameterlists does not match")
+			raise ValueError("Number of parameterlists does not match " + str(len(parameterLists)) + ' ' + str(len(self.massBins)))
 		for i,mb in enumerate(self.massBins):
 			if skipZeroPars:
 				nZ = mb.nZero
 				mb.setTheoryFromOwnFunctions(parameterLists[i][2*nZ:], restrictToRange = restrictToRange)
 			else:
-				mb.setTHeoryFromOwnFunctions(parameterLists[i], restrictToRange = restrictToRange)
+				mb.setTheoryFromOwnFunctions(parameterLists[i], restrictToRange = restrictToRange)
 
 	def linearizeZeroModeParameters(self, pars):
 		"""
@@ -231,7 +240,14 @@ class allBins:
                                         A[2*(countZero + j)  ,2*(countZero + k)+1] += a[2*j  ,2*k+1]
                                         A[2*(countZero + j)+1,2*(countZero + k)  ] += a[2*j+1,2*k  ]
                                         A[2*(countZero + j)+1,2*(countZero + k)+1] += a[2*j+1,2*k+1]
-			countZero += self.massBins[i].nZero	
+			countZero += self.massBins[i].nZero
+#		val,vec = la.eig(A)
+#		for v in val:
+#			print v,
+#			if v.real  < 0.:
+#				print "!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+#			else:
+#				print
 		return A,B,C
 
 	def writeZeroModeCoefficients(self, coefficients, outFileName, tBin = "<tBin>"):
@@ -280,9 +296,24 @@ class allBins:
 			countZero += self.massBins[i].nZero
 		return chi2
 
+	def resolvedSmoothnessChi2(self, params):
+		"""
+		Gives the chi2 for the smoothness method, resolved by m bins (Contribution of every bin's COMA)
+		"""	
+		countZero = 0
+		chi2s     = [0.] * (self.binStop - self.binStart)
+		for i in range(self.binStop - self.binStart):
+			if not i == 0:
+				chi2s[i]  += self.massBins[i-1].smoothnessChi2(self.massBins[i], params[2*countZero:2*(countZero + self.massBins[i].nZero + self.massBins[i-1].nZero)], useSelf = False)
+				countZero += self.massBins[i].nZero
+			if not i == self.binStop - self.binStart-1:
+				chi2s[i] += self.massBins[i].smoothnessChi2(self.massBins[i+1], params[2*countZero:2*(countZero + self.massBins[i+1].nZero + self.massBins[i].nZero)], useOther = False)
+		return chi2s
+
+
 	def rotateToPhaseOfBin(self, nBin):
 		"""
-		Rotates the global phase, that the phase of nBin is (Simple mass bin loop)
+		Rotates the global phase, that the phase of nBin is zero (Simple mass bin loop)
 		"""
 		for mb in self.massBins:
 			mb.rotateToPhaseOfBin(nBin)
@@ -296,5 +327,4 @@ class allBins:
 			nz = 2*mb.nZero
 			mb.fillHistograms(params[parCount:parCount+nz], hists, mode = mode)
 			parCount += nz		
-
 	

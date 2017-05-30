@@ -8,6 +8,9 @@ from modes import INTENS, PHASE, REAL, IMAG, INTENSNORM, INTENSTHEO, REALTHEO, I
 
 class massBin:
 	def __init__(self, nBin, realHists, imagHists, normHists, indexHists, coma):
+		"""
+		Initializer that sets data arrays
+		"""
 		self.bin3pi    = nBin
 		self.binCenter = 0.52 + .04*nBin
 		if not len(realHists) == len(imagHists) or not len(imagHists) == len(normHists) or not len(normHists) == len(indexHists):
@@ -73,6 +76,9 @@ class massBin:
 		self.specialCOMAs    = { }
 
 	def initChi2(self, sectorFuncMap):
+		"""
+		Initializes the chi2 function
+		"""
 		self.nPar   =  0
 		self.nFuncs = [ ]
 		self.funcs  = self.toIntegerSectorMap(sectorFuncMap)
@@ -89,6 +95,9 @@ class massBin:
 		self.chi2init = True
 
 	def chi2(self, pars = [], returnParameters = False):
+		"""
+		Evaluates the chi2 function, with shape parameters. If none are set, it uses, the internally set ones. non-shape parameters are calculated
+		"""
 		if not self.chi2init:
 			raise RuntimeError("chi2 not inited, cannot evaluate")
 		if len(pars) > 0:
@@ -102,15 +111,27 @@ class massBin:
 			return chi2
 
 	def nParAll(self):
+		"""
+		Total number of paramters
+		"""
 		return 2*self.nZero + 2*self.nFunc + self.nPar
 
 	def phaseChi2(self, pars):
+		"""
+		Gets the chi2 for the PHASE method
+		"""
 		return self.modeChi2(pars, PHASE)
 
 	def intensChi2(self, pars):
+		"""
+		Gets the chi2 for the INTENS method
+		"""
 		return self.modeChi2(pars, INTENS)
 
 	def modeChi2(self, pars, mode = PHASE):
+		"""
+		Gets the chi2 for a special mode, PHASE of INTENS
+		"""
 		if not self.chi2init:
 			raise RuntimeError("chi2 not inited, cannot evaluate")
 		if not len(pars) == self.nParAll():
@@ -142,7 +163,7 @@ class massBin:
 					deltas[bin] = corrAmpl[2*bin]**2 + corrAmpl[2*bin+1]**2 - abs(self.theo[bin])**2
 
 
-		coma = utils.pinv(self.getSpecialComa(mode), self.numLim)
+		coma = self.getSpecialComaInv(mode)
 		retVal = np.dot(deltas, np.dot(coma, deltas))
 
 		removePhaseDirection = True
@@ -155,7 +176,10 @@ class massBin:
 
 		return retVal
 
-	def getSpecialComa(self, mode = PHASE):
+	def getSpecialComaInv(self, mode = PHASE):
+		"""
+		Returns the transformed covarinace matrix for a special method. Stores it also, to do not have to do this over and over again
+		"""
 		if mode in self.specialCOMAs:
 			return self.specialCOMAs[mode]
 		jacobian = np.zeros((self.totalBins, 2*self.totalBins))
@@ -175,11 +199,14 @@ class massBin:
 					common = 1. + im**2/re**2
 					jacobian[i,2*i  ] = -im/re**2/common
 					jacobian[i,2*i+1] = 1./re/common
-		retVal = np.dot(jacobian, np.dot(self.coma, np.transpose(jacobian)))
+		retVal = utils.pinv(np.dot(jacobian, np.dot(self.coma, np.transpose(jacobian))), self.numLim)
 		self.specialCOMAs[mode] = retVal
 		return retVal
 
 	def setShapeParameters(self, pars):
+		"""
+		Sets the shape parameters of the functions
+		"""
 		if not self.chi2init:
 			raise RuntimeError("chi2 not inited, no knowledge about shape parameters")
 		if not len(pars) == self.nPar:
@@ -193,6 +220,9 @@ class massBin:
 				countPar += f.nPar
 
 	def setParametersAndErrors(self, pars, errors):
+		"""
+		Sets parameters and errors of the functions
+		"""
 		if not self.chi2init:
 			print "chi2 not inited, no knowledge about shape parameters"
 			return False
@@ -214,6 +244,9 @@ class massBin:
 		return True
 
 	def getOwnTheoryABC(self):
+		"""
+		Gets the A B and C from the own theory functions: chi2(p) = pAP + Bp + C
+		"""
 		if not self.chi2init:
 			raise RuntimeError("chi2 not inited, cannot get ABC")
 		nTotal = self.nZero + self.nFunc
@@ -275,9 +308,15 @@ class massBin:
 		return A,B,C
 
 	def setZeroTheory(self):
+		"""
+		Sets the own theory evaluation to zero
+		"""
 		self.theo = np.zeros((self.totalBins), dtype = complex)
 
 	def setTheory(self, sectParFunctMap = {}):
+		"""
+		Sets the own theory evaluations to the given or set functions
+		"""
 		spfm = self.toIntegerSectorMap(sectParFunctMap)
 
 		self.theo = np.zeros((self.totalBins), dtype = complex)
@@ -307,6 +346,9 @@ class massBin:
 		self.hasTheo = True
 
 	def unifyComa(self):
+		"""
+		Sets unity as covariance matrix
+		"""
 		for i in range(len(self.coma)):
 			for j in range(len(self.coma)):
 				if i == j:
@@ -318,10 +360,16 @@ class massBin:
 		self.specialCOMAs = {}
 
 	def makeComaInv(self):
+		"""
+		Inverts the covariance matrix (To be able to change the inversion method globally)
+		"""
 		self.comaInv = utils.pinv(self.coma, self.numLim)
 
 
 	def removeZeroModeFromComa(self):
+		"""
+		Removes the dorection of the zero-mode from the covariance matrix
+		"""
 		if len(self.zeroModes) == 0:
 			return
 		dim = len(self.coma)
@@ -335,7 +383,26 @@ class massBin:
 		self.makeComaInv()
 		self.specialCOMAs = {}
 
+	def zeroModeMultiplicationCheck(self, coeff = 1.):
+		"""
+		Multiplies the inverted coma with the zero-modes and prints the result
+		"""
+		dim = len(self.comaInv)
+		for z in range(self.nZero):
+			val = 0.
+			for i in range(dim/2):
+				for j in range(dim/2):
+					val += self.zeroModes[z][i]*self.comaInv[2*i  ,2*j  ]*self.zeroModes[z][j]
+					val += self.zeroModes[z][i]*self.comaInv[2*i  ,2*j+1]*self.zeroModes[z][j]
+					val += self.zeroModes[z][i]*self.comaInv[2*i+1,2*j  ]*self.zeroModes[z][j]
+					val += self.zeroModes[z][i]*self.comaInv[2*i+1,2*j+1]*self.zeroModes[z][j]
+			print "Check for zero mode",str(z),":",str(val)
+
+
 	def getGlobalPhaseDirection(self):
+		"""
+		Gets the direction of a global phase rotation
+		"""
 		retVal = np.zeros((2*self.totalBins))
 		for i in range(self.totalBins):
 			retVal[2*i  ] = -self.imags[i]
@@ -344,6 +411,9 @@ class massBin:
 		return normVector(retVal)
 
 	def removeGlobalPhaseFromComa(self):
+		"""
+		Removes the direction of a global phase rotation from the covariance matrix
+		"""
 		phaseDirection = self.getGlobalPhaseDirection()
 		dim = 2*self.totalBins
 		transformationMatrix = np.identity(dim)
@@ -355,14 +425,40 @@ class massBin:
 		self.specialCOMAs = {}
 
 	def setMassRanges(self, massRanges):
+		"""
+		Sets the mass ranges for the chi2 functions
+		"""
+		if self.hasMassRange:
+			raise RuntimeError("Cannot setMassRange(...) twice, since the COMA has to be cut")
 		self.massRanges   = self.toIntegerSectorMap(massRanges)
+		zeroIndices = []
+		for s in range(self.nSect):
+			for i,b in enumerate(range(self.borders[s],self.borders[s+1])):
+				if s in self.massRanges:
+					binCenterMass = self.binCenters[b]
+					if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
+						zeroIndices.append(b)
+		for i in range(len(self.coma)):
+			for zi in zeroIndices:
+				self.coma[i,2*zi  ] = 0.
+				self.coma[i,2*zi+1] = 0.
+				self.coma[2*zi  ,i] = 0.
+				self.coma[2*zi+1,i] = 0.
+
 		self.hasMassRange = True
+		self.makeComaInv()
+		self.specialCOMAs = {}
 
 	def setTheoryFromOwnFunctions(self, parameterList, restrictToRange = True):
+		"""
+		Sets theory curves from own functions	
+		"""
+		if self.hasMassRange and not restrictToRange:
+			raise RuntimeError("Setting a mass range now changes the COMA, this combination of features is not avalable anymore")
 		if not self.chi2init:
 			raise RuntimeError("Chi2 not inited, does not have own functions")
 		if not len(parameterList) == 2*self.nFunc:
-			raise ValueError("Number of parameters does not match")
+			raise ValueError("Number of parameters does not match "+ str(len(parameterList)) + ' ' + str(2*self.nFunc))
 		countFunc = 0
 		self.theo = np.zeros((self.totalBins), dtype = complex)
 		for s in range(self.nSect):
@@ -387,18 +483,31 @@ class massBin:
 							self.theo[b] = 0.+0.j
 		self.hasTheo = True
 
-	def writeAmplitudeAndArgandFile(self, params, outFileNameBase):
-		pass
-
-		
+	def getNDF(self):
+		"""
+		Return NDF as (NDF, 2*nZero, 2*nFunc, nPar)
+		"""
+		NDF = 0
+		for s in range(self.nSect):
+			for i,b in enumerate(range(self.borders[s],self.borders[s+1])):
+				if self.hasMassRange:
+					if s in self.massRanges:
+						binCenterMass = self.binCenters[b]
+						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
+							continue
+				NDF += 2
+		return (NDF, 2*self.nZero, 2*self.nFunc, self.nPar)
 
 	def writeZeroModeCoefficients(self, coefficients, outFileName, tBin = "<tBin>", mode = 'a'):
+		"""
+		Writes the zero-mode coefficients to a text file
+		"""
 		tBin  = str(tBin)
 		cmplx = False
 		if len(coefficients) == self.nZero:
 			cmplx = True
 		elif not len(coefficients) == 2*self.nZero:
-			raise IndexError("Number of coefficients for "+str(self.nZero)+" modes does not match (netiher real nor complex): " +str(len(coefficients)))
+			raise IndexError("Number of coefficients for "+str(self.nZero)+" modes does not match (neither real nor complex): " +str(len(coefficients)))
 		with open(outFileName, mode) as out:
 			out.write(tBin + ' ' + str(self.bin3pi))
 			for i in range(self.nZero):
@@ -410,11 +519,17 @@ class massBin:
 			out.write('\n')
 
 	def renormZeroModes(self):
+		"""
+		Renors the zero modes
+		"""
 		for z in range(self.nZero):
 			for i in range(self.totalBins):
 				self.zeroModes[z][i] *= self.norms[i]**.5
 
 	def addZeroMode(self, modeBorders, modeHist, eigenvalueHist = None):
+		"""
+		Add a zero mode, determines, whether it is needed and sets it accordingly
+		"""
 		newMode  = np.zeros((self.totalBins))
 		modeList = getZeroHistSectors(modeHist)
 		modeMap  = {}
@@ -453,6 +568,9 @@ class massBin:
 		self.nZero = len(self.zeroModes)
 
 	def getTheoryABC(self, sector, parametrizations, massRange = None):
+		"""
+		Gets the A B and C for evalueations from the set theory: chi2(p) = pAP + Bp + C
+		"""
 		nPara   = len(parametrizations)
 		if sector < 0 or sector >= self.nSect:
 			raise IndexError("Sector "+str(sector)+" invalid")
@@ -490,6 +608,9 @@ class massBin:
 		return A,B,C
 
 	def getSmoothnessABC(self,other):
+		"""
+		Gets the A B and C for the smoothness method
+		"""
 		if not self.sectors == other.sectors:
 			raise ValueError("Sectors do not match")
 		totalNzero = self.nZero + other.nZero
@@ -534,8 +655,11 @@ class massBin:
 		return Aself+Aother, 2*(Bself + Bother), Cself + Cother # A factor 2 was missing inB
 
 	def getCorrectedAmplitudes(self, params):
+		"""
+		Get the amplitudes, shifted by zero modes according to the parameters
+		"""
 		if not len(params) == 2*self.nZero:
-			raise IndexError("Parameter size does not match")
+			raise IndexError("Parameter size does not match " + str(len(params)) + ' ' + str(2*self.nZero))
 		amp = np.zeros((2*self.totalBins))
 		for i in range(self.totalBins):
 			amp[2*i  ] = self.reals[i]
@@ -546,6 +670,9 @@ class massBin:
 		return amp
 
 	def theoChi2(self, sector, funcs, params):
+		"""
+		Get the chi2 for the own theory (amplitude level)
+		"""
 		if not len(params) == 2*self.nZero + 2*len(funcs):
 			raise IndexError("Parameter size does not match")
 		binStart = self.borders[sector]
@@ -563,7 +690,10 @@ class massBin:
 			count += 1
 		return np.dot(deltas, np.dot(self.comaInv, deltas))
 
-	def smothnessChi2(self, other, params):
+	def smoothnessChi2(self, other, params, useSelf = True, useOther = True):
+		"""
+		Gets the smoothness chi2 w.r.t. another mass bin
+		"""
 		if not self.sectors == other.sectors:
 			raise ValueError("Sectors do not match")
 		Dself  = np.zeros((2*self.totalBins))
@@ -584,9 +714,17 @@ class massBin:
 				Dother[2*(startOther + i)+1] = ampsSelf[2*(i+startSelf)+1] - ampsOther[2*(i+startOther)+1]
 		Cself  = np.dot(Dself, np.dot(self.comaInv, Dself))
 		Cother = np.dot(Dother, np.dot(other.comaInv, Dother))
-		return Cself + Cother
+		retVal = 0.
+		if useSelf:
+			retVal += Cself
+		if useOther:
+			retVal += Cother
+		return retVal
 
 	def fillHistograms(self, params, hists, mode = INTENS):
+		"""
+		Fill coorespi=onding m3pi bin of 2D histograms
+		"""
 		if mode.IS_THEO and not self.hasTheo:
 			print "No theory loaded, cannot fill histogram"
 		if not len(hists) == self.nSect:
@@ -648,6 +786,9 @@ class massBin:
 				count += 1
 
 	def rotateToPhaseOfBin(self, nBin):
+		"""
+		Rotates the global phase, that the phase of nBin is zero
+		"""	
 		ampl = self.reals[nBin] - 1.j*self.imags[nBin]
 		ampl/= abs(ampl)
 		re = ampl.real
@@ -668,6 +809,9 @@ class massBin:
 		self.specialCOMAs = {}
 
 	def comaIsSymmetric(self):
+		"""
+		Checks, if the covriance matrix is symmetric
+		"""
 		for i in range(2*self.totalBins):
 			for j in range(2*self.totalBins):
 				if not self.coma[i,j] == self.coma[j,i]:
@@ -676,6 +820,9 @@ class massBin:
 		return True
 
 	def toIntegerSectorMap(self, mapp):
+		"""
+		Changes a map of {sector : <anything>}, where the key can be string or int to a corresponding map, where the keys are ints
+		"""
 		if mapp == {}:
 			return {}
 		isInt = False
