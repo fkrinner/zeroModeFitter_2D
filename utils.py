@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.linalg as la
+import os, sys 
 
 numLim = 1.E-10
 INF = float("inf")
@@ -205,7 +206,7 @@ def addBtoA(A,B, weight = 1.):
 		else:
 			A[i] += weight*B[i]
 
-def divideAbyB(A,B):
+def divideAbyB(A,B, ignoreZero = False):
 	"""
 	Divides the entries of A by the corresponding entris of B
 	"""
@@ -213,9 +214,12 @@ def divideAbyB(A,B):
 		raise ValueError("divideAbyB(...): Size mismatch ('" + str(len(A)) + "' != '" + str(len(B)) + "')" )
 	for i in range(len(A)):
 		if hasattr(A[i], "__len__"):
-			divideAbyB(A[i], B[i])
+			divideAbyB(A[i], B[i], ignoreZero = ignoreZero)
 		else:
-			A[i] /= B[i]
+			if ignoreZero and B[i] == 0.:
+				A[i] == 0.
+			else:
+				A[i] /= B[i]
 
 def weightedSum(weights, params):
 	"""
@@ -230,24 +234,40 @@ def weightedSum(weights, params):
 		addBtoA(retVal, params[m], weights[m])
 	return retVal
 
-def invertAllEntries(A):
+def invertAllEntries(A, nanToZero = False):
 	for i in range(len(A)):
 		if hasattr(A[i], "__len__"):
-			invertAllEntries(A[i])
+			invertAllEntries(A[i], nanToZero = nanToZero)
 		else:
-			A[i] = 1./A[i]
+			if nanToZero and (A[i] == 0. or np.isnan(A[i])):
+				A[i] = 0.
+			else:
+				A[i] = 1./A[i]
+
+def printZeroStructure(matrix):
+	dim = len(matrix)
+	for i in range(dim):
+		st = ""
+		for j in range(dim):
+			if matrix[i,j] == 0.:
+				st += '0'
+			else:
+				st += '1'
+		print st
+
+def checkLaTeX():
+	"""
+	Checks, if 'uplatex' has been called. Raises an exception, if not, 
+	so the program terminates right there and does not keep calculating 
+	and then crash on plotting.
+	"""
+	if not "/nfs/mnemosyne/sys/slc6/contrib/texlive/2013/bin/x86_64-linux" in os.environ["PATH"]:
+		raise RuntimeError("LaTeX not set correctly, aborting")
+
 
 def main():
-	lst = [[[1,2,3],[1,2]],[1,2,3]]
-	for a in multiYield(lst):
-		print a
-	return
-
-	zers =  cloneZeros(lst)
-	weight = 2
-	addBtoA(zers, lst, weight)
-	addBtoA(zers, lst)
-	print zers
+	checkLaTeX()
+	print "Ran"
 
 if __name__ == "__main__":
 	main()

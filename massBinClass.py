@@ -2,7 +2,7 @@ import pyRootPwa
 import numpy as np
 import numpy.linalg as la
 import utils
-from utils import getZeroHistSectors, normVector, getZeroModeNumber
+from utils import getZeroHistSectors, normVector, getZeroModeNumber, printZeroStructure
 from cmath import phase, pi
 from modes import INTENS, PHASE, REAL, IMAG, INTENSNORM, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO, REIMCORRELATION
 
@@ -73,6 +73,7 @@ class massBin:
 		self.hasTheo         = False
 		self.hasMassRange    = False
 		self.chi2init        = False
+		self.zeroModesRemovedFromComa = False
 		self.specialCOMAs    = { }
 
 	def initChi2(self, sectorFuncMap):
@@ -109,6 +110,30 @@ class massBin:
 			return chi2, pars
 		else:
 			return chi2
+
+	def compareTwoZeroModeCorrections(self, params1, params2):
+		"""
+		Compares two different corrections of the zero-modes
+		"""
+		if self.zeroModesRemovedFromComa:
+			raise RuntimeError("Comparison does not make sense with removed zero-mode directions")
+		if not len(params1) == 2*self.nZero:
+			raise ValueError("Number of zero modes does not match (1)")
+		if not len(params2) == 2*self.nZero:
+			raise ValueError("Number of zero modes does not match (2)")
+		deltas = np.zeros((2*self.totalBins))	
+		print '--------in mass bin class'
+		print '--------',params1
+		print '--------',params2
+		print '--------out mass bin class'
+		for b in range(self.totalBins):
+			for z in range(self.nZero):
+				zm = self.zeroModes[z][b]
+#				coeff = params1[z] - params2[z]
+				deltas[2*b  ] = zm*(params1[2*z  ] - params2[2*z  ])
+				deltas[2*b+1] = zm*(params1[2*z+1] - params2[2*z+1])
+		print '-------->>>',np.dot(deltas, deltas)
+		return np.dot(deltas, np.dot(self.comaInv, deltas))
 
 	def nParAll(self):
 		"""
@@ -159,12 +184,14 @@ class massBin:
 						deltas[bin] -= 2*pi
 					if deltas[bin] < -pi:
 						deltas[bin] += 2*pi
+#					print phase(corrAmpl[2*bin] + 1.j*corrAmpl[2*bin+1]),'-',phase(self.theo[bin]),'=',deltas[bin]
+
 				elif mode == INTENS:
 					deltas[bin] = corrAmpl[2*bin]**2 + corrAmpl[2*bin+1]**2 - abs(self.theo[bin])**2
-
-
 		coma = self.getSpecialComaInv(mode)
+#		printZeroStructure(coma)
 		retVal = np.dot(deltas, np.dot(coma, deltas))
+#		print np.dot(deltas, deltas),"{{{{{{{{{{{}"
 
 		removePhaseDirection = True
 		if removePhaseDirection:
@@ -173,7 +200,6 @@ class massBin:
 			for i in range(len(deltas)):
 				sp += entry * deltas[i]
 			retVal += sp**2*retVal
-
 		return retVal
 
 	def getSpecialComaInv(self, mode = PHASE):
@@ -351,7 +377,7 @@ class massBin:
 		"""
 		for i in range(len(self.coma)):
 			for j in range(len(self.coma)):
-				if i == j:
+				if i == j and not self.coma[i,i] == 0.:
 					self.coma[i,j] = 1.
 					self.comaInv[i,j] = 1.
 				else:
@@ -382,6 +408,7 @@ class massBin:
 		self.coma         = np.dot(transformationMatrix, np.dot(self.coma, transformationMatrix)) # no transpose needed, since transformationMatrix is symmetric
 		self.makeComaInv()
 		self.specialCOMAs = {}
+		self.zeroModesRemovedFromComa = True
 
 	def zeroModeMultiplicationCheck(self, coeff = 1.):
 		"""
@@ -566,6 +593,7 @@ class massBin:
 		self.zeroModeTitles.append(modeHist.GetTitle())
 		self.zeroModes.append(newMode)
 		self.nZero = len(self.zeroModes)
+		return True
 
 	def getTheoryABC(self, sector, parametrizations, massRange = None):
 		"""
@@ -700,6 +728,8 @@ class massBin:
 		Dother = np.zeros((2*other.totalBins))
 		paramsSelf  = params[:2*self.nZero]
 		paramsOther = params[2*self.nZero:]
+#		print self.nZero, other.nZero, params,"LLLLLLLLLOOPPdssa"
+
 		ampsSelf  = self.getCorrectedAmplitudes(paramsSelf)
 		ampsOther = other.getCorrectedAmplitudes(paramsOther)
 		for s in range(self.nSect):

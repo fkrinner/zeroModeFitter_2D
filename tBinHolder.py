@@ -23,7 +23,26 @@ class tBinHolder:
 		chi2 = 0
 		for bin in self.bins:
 			chi2 += bin.chi2(params)
+#		print "chi2 call with", params, 'giving', chi2
+#		print ">>>",chi2,"<<<"
 		return chi2
+
+	def compareTwoZeroModeCorrections(self, params1, params2):
+		"""
+		Compares two different corrections of the zero-modes
+		"""
+		if not len(params1) == len(self.bins):
+			raise ValueError("Number of t' bins does not match (1)" )
+		if not len(params2) == len(self.bins):
+			raise ValueError("Number of t' bins does not match (2)" )
+		retVal = []
+		print "----in tbin holder"
+		print '----',params1
+		print '----',params2
+		print "----out tbin holder"
+		for t, tb in enumerate(self.bins):
+			retVal.append(tb.compareTwoZeroModeCorrections(params1[t], params2[t]))
+		return retVal
 
 	def nParAll(self):
 		"""

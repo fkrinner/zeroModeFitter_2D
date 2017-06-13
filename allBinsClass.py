@@ -53,13 +53,17 @@ class allBins:
 			chi2 = []
 		else:
 			chi2  = 0.
-		count = 0
+		count = 0 #Here the adjustments have to be made
 		nPar  = self.massBins[0].nPar
-		nNon  = 2*(self.massBins[0].nZero + self.massBins[0].nFunc)
+#		nNon1   = 2*(self.massBins[0].nZero + self.massBins[0].nFunc)
 		for i, mb in enumerate(self.massBins):
+#			nNon2   = 2*(self.massBins[i].nZero + self.massBins[i].nFunc)
+			nNon   = 2*(mb.nZero + mb.nFunc)
+#			print "::OOPP",nNon,nNon1, nNon2
 			par    = pars[count:count+nNon]
 			if nPar > 0:
 				par += pars[-nPar:]
+#			print par
 			binC2 = mb.modeChi2(par, mode = mode)
 			if mBinResolved:
 				chi2.append(binC2)
@@ -114,6 +118,23 @@ class allBins:
 		else:
 			return chi2
 
+	def compareTwoZeroModeCorrections(self, params1, params2):
+		"""
+		Compares two different corrections of the zero-modes
+		"""
+		if not len(params1) == len(self.massBins):
+			raise ValueError("Number of mass bins does not match (1)" )
+		if not len(params2) == len(self.massBins):
+			raise ValueError("Number of mass bins does not match (2)" )
+		retVal = []
+		print '------in all bins class'
+		print '------',params1
+		print '------',params2
+		print '------out all bins class'
+		for m, mb in enumerate(self.massBins):
+			retVal.append(mb.compareTwoZeroModeCorrections(params1[m], params2[m]))
+		return retVal
+
 	def setParametersAndErrors(self, parameters, errors):
 		"""
 		Sets the internal parameters (and their uncertainties) 
@@ -130,8 +151,12 @@ class allBins:
 		"""
 		Adds a zero-mode (Simple mass bin loop)
 		"""
+		addedList = []
 		for mb in self.massBins:
-			mb.addZeroMode(borders, zeroMode, eigenvalueHist = None)
+			val = mb.addZeroMode(borders, zeroMode, eigenvalueHist = None)
+			addedList.append(val)
+#		print "zero modes taken:",addedList
+		return addedList
 
 	def renormZeroModes(self):
 		"""
@@ -259,8 +284,9 @@ class allBins:
 		if len(coefficients) == nZero:
 			cmplx = True
 		elif not len(coefficients) == 2*nZero:
-			raise IndexError("Number of coefficients for "+str(self.nZero)+" modes does not match (neither real nor complex): " +str(len(coefficients)))
-		tBin  = str(tBin)		
+#			print nZero,"::::::::::::::::{{{"
+			raise IndexError("Number of coefficients for "+str(nZero)+" modes does not match (neither real nor complex): " +str(len(coefficients)))
+		tBin  = str(tBin)
 		count = 0
 		for mb in self.massBins:
 			nn = mb.nZero
@@ -299,17 +325,20 @@ class allBins:
 	def resolvedSmoothnessChi2(self, params):
 		"""
 		Gives the chi2 for the smoothness method, resolved by m bins (Contribution of every bin's COMA)
-		"""	
+		"""
 		countZero = 0
 		chi2s     = [0.] * (self.binStop - self.binStart)
 		for i in range(self.binStop - self.binStart):
+			nZm = 0
+			nZ  = self.massBins[i].nZero 
 			if not i == 0:
-				chi2s[i]  += self.massBins[i-1].smoothnessChi2(self.massBins[i], params[2*countZero:2*(countZero + self.massBins[i].nZero + self.massBins[i-1].nZero)], useSelf = False)
-				countZero += self.massBins[i].nZero
+				nZm = self.massBins[i-1].nZero 
+				chi2s[i]  += self.massBins[i-1].smoothnessChi2(self.massBins[i], params[2*countZero:2*(countZero+ nZ + nZm)], useSelf = False)
 			if not i == self.binStop - self.binStart-1:
-				chi2s[i] += self.massBins[i].smoothnessChi2(self.massBins[i+1], params[2*countZero:2*(countZero + self.massBins[i+1].nZero + self.massBins[i].nZero)], useOther = False)
+				nZp = self.massBins[i+1].nZero
+				chi2s[i]  += self.massBins[i].smoothnessChi2(self.massBins[i+1], params[2*(countZero + nZm):2*(countZero + nZm + nZ + nZp)], useOther = False)
+			countZero += nZm
 		return chi2s
-
 
 	def rotateToPhaseOfBin(self, nBin):
 		"""
@@ -326,5 +355,5 @@ class allBins:
 		for mb in self.massBins:
 			nz = 2*mb.nZero
 			mb.fillHistograms(params[parCount:parCount+nz], hists, mode = mode)
-			parCount += nz		
+			parCount += nz
 	

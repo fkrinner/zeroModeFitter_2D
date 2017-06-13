@@ -7,7 +7,7 @@ from massBinClass import massBin
 from modes import REAL, IMAG, PHASE, INTENS, INTENSNORM, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO, REIMCORRELATION
 from resultViewerClass import resultViewer
 import os, sys
-from utils import zeroForSectors, getZeroHistBorders, renormToBinWidth
+from utils import zeroForSectors, getZeroHistBorders, renormToBinWidth, checkLaTeX
 import parameterizationClasses as pc
 import parameterTrackingParameterizations as ptc
 import scipy.optimize
@@ -17,14 +17,15 @@ from LaTeX_strings import getProperWaveName, getProperDataSet
 
 
 def main(rhoFileName = ""):
+	checkLaTeX()
 # # # #  Monte-Carlo results
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
-#	inFileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/ppppppppp/DpPiPiPi.root"
+	inFileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/ppppppppp/DpPiPiPi.root"
 # # # # Real-data results
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_three0pp.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_bigger1pp.root"
-	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_exotic.root"
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_exotic.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_bigger2pp.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_bigger2mp.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_3pp.root"
@@ -34,7 +35,9 @@ def main(rhoFileName = ""):
 
 
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
-#	sectors = ["Dp[pi,pi]0++PiS","Dp[pi,pi]1--PiP"]
+	sectors = ["Dp[pi,pi]0++PiS","Dp[pi,pi]1--PiP"]
+#	sectors = ["Dp[pi,pi]0++PiS"]
+#	sectors = ["Dp[pi,pi]1--PiP"]
 # # # # # Std11 Definitions
 	std11_0mp0p = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
 	std11_1pp0p = ["1++0+[pi,pi]0++PiP","1++0+[pi,pi]1--PiS"]
@@ -46,7 +49,7 @@ def main(rhoFileName = ""):
 # # # # # Bigger 1++ definitions
 #	sectors = std11_1pp0p + ["1++0+[pi,pi]1--PiD", "1++0+[pi,pi]2++PiP"]
 # # # # # Exotic (1-+)
-	sectors = ["1-+1+[pi,pi]1--PiP"]
+#	sector_exotic = ["1-+1+[pi,pi]1--PiP"]
 # # # # # Bigger 2++ definitions
 #	sectors = std11_2pp1p + ["2++1+[pi,pi]2++PiP"]
 # # # # # Bigger 2-+ definitions
@@ -62,13 +65,16 @@ def main(rhoFileName = ""):
 #	sectors = ["6-+0+[pi,pi]1--PiH"]
 
 #	sectors = std11_0mp0p
+#	sectors = sector_exotic
 #	sectors = std11_1pp0p
 #	sectors = std11_1pp1p
 #	sectors = std11_2mp0p
 #	sectors = std11_2mp1p
 #	sectors = std11_2pp1p
 
-	doSpecialOneBinFit = -15 # negative values turn it off
+#	sectors = std11_0mp0p[:1]
+
+	doSpecialOneBinFit = -34 # negative values turn it off
 
 	sectorUseMap = { # Defines, if for the given sector a theory curve will be used
 		"0-+0+[pi,pi]0++PiS" : True,
@@ -91,16 +97,17 @@ def main(rhoFileName = ""):
 #			sectorRangeMap[sector] = (0.,.94)
 
 	tBin             = 0
-	startBin         = 0
-	stopBin          = 50
+	startBin         = 34
+	stopBin          = 35
 #	startBin         = 25
 #	stopBin          = 26
 #	startBin         = 25
 #	stopBin          = 50
 	polynomialDegree = 0
-	modelMode        = "fixedShapes"
+#	modelMode        = "fixedShapes"
+#	modelMode        = "pipiS"
 #	modelMode        = "none"
-#	modelMode        = "simpleBW_Dp"
+	modelMode        = "simpleBW_Dp"
 #	modelMode        = "BW"
 #	modelMode        = "explicitRhoFile"
 	useSmooth        = False
@@ -129,15 +136,20 @@ def main(rhoFileName = ""):
 				waveModel[sector] = rhoModel
 
 	elif modelMode == "simpleBW_Dp":
-#		f0Mass   = ptc.parameter(.98, "f0Mass" )
-#		f0Width  = ptc.parameter(.1 , "f0Width")
-#		rhoMass  = ptc.parameter(.77, "rhoMass")
-#		rhoWidth = ptc.parameter(.16, "rhoWidth")
+		f0Mass   = ptc.parameter(.98, "f0Mass" )
+		f0Width  = ptc.parameter(.1 , "f0Width")
+		rhoMass  = ptc.parameter(.77, "rhoMass")
+		rhoWidth = ptc.parameter(.16, "rhoWidth")
 
-		f0Mass   = ptc.parameter(1., "f0Mass" )
-		f0Width  = ptc.parameter(.11 ,"f0Width")
-		rhoMass  = ptc.parameter(.75, "rhoMass")
-		rhoWidth = ptc.parameter(.18, "rhoWidth")
+#		f0Mass   = ptc.parameter(1.4 , "f0Mass"  )
+#		f0Width  = ptc.parameter( .1 , "f0Width" )
+#		rhoMass  = ptc.parameter( .77, "rhoMass" )
+#		rhoWidth = ptc.parameter( .16, "rhoWidth")
+
+#		f0Mass   = ptc.parameter(1., "f0Mass" )
+#		f0Width  = ptc.parameter(.11 ,"f0Width")
+#		rhoMass  = ptc.parameter(.75, "rhoMass")
+#		rhoWidth = ptc.parameter(.18, "rhoWidth")
 
 
 		f0Mass.lock   = True; f0Width.lock  = True; rhoMass.lock  = True; rhoWidth.lock = True
@@ -186,6 +198,12 @@ def main(rhoFileName = ""):
 		for sector in sectors:
 			if '1--' in sector:
 				waveModel[sector] = [param]
+
+	elif modelMode == "pipiS":
+		pipiSfileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/zeroModes/bwAmplitudes_noBF/amp_0mp0pSigmaPiS"
+		pipiSw = pc.fixedParameterization(pipiSfileName, polynomialDegree  = 0, complexPolynomial = False)
+		waveModel = {"0-+0+[pi,pi]0++PiS": [pipiSw]}
+
 
 	elif modelMode == "none":
 		waveModel = {}
@@ -262,22 +280,42 @@ def main(rhoFileName = ""):
 #		ab.rotateToPhaseOfBin(10)
 #		ab.removeZeroModeFromComa()
 #		ab.removeGlobalPhaseFromComa()
-#		ab.unifyComa()
+		ab.unifyComa()
 
 		if phaseFit:
+			ab.setMassRanges(sectorRangeMap)
 			for mb in ab.massBins:
 				mb.setZeroTheory()
 			from random import random
 			ab.initChi2(waveModel)
-			nBin = 25
+			nBin = startBin
 			leBin = ab.massBins[nBin - startBin]
-			pars  = [random() for _ in range(leBin.nParAll())]
-			print leBin.phaseChi2(pars)
-			res = scipy.optimize.minimize(leBin.phaseChi2, pars)
-			print "phaseFit gives for bin",nBin 
-			print "Giving a Chi2 of:",res.fun
-			paramsZ = [res.x[0], res.x[1]] * 100 # Very, very bad hack...
-	
+			nTries = 10
+			mnn = float("inf")
+#			for tr in range(nTries):
+#				print "at",tr,'/',nTries
+#				pars  = [random() for _ in range(leBin.nParAll())]
+##				print leBin.phaseChi2(pars)
+#				res = scipy.optimize.minimize(leBin.phaseChi2, pars)
+#				if res.fun < mnn:
+#					print "Improved from",mnn,"to",res.fun,"in try",tr
+#					mnn = res.fun
+#					bestPar = res.x[:]
+#			print bestPar, "bestPar"
+			paramsPhaseChi2 = [148.57310258,  143.66171657,  116.67030827 ,  -6.8412118]
+			paramsAmplChi2  = [-52.51465293, -10.3576874 ,   6.69282325,  64.28970961]
+			print "----------------====----------------------------"
+			leBin.phaseChi2(paramsPhaseChi2)
+			print "----------------====----------------------------"
+			leBin.phaseChi2(paramsAmplChi2)
+			print "----------------====----------------------------"
+#			paramsZ = [bestPar[0], bestPar[1]] * 1 # Very, very bad hack...
+#			paramsZ = paramsPhaseChi2[:2]
+			ptu = paramsAmplChi2
+
+			leBin.phaseChi2(ptu)
+			paramsZ = ptu[:2]
+
 		if doSpecialOneBinFit >= 0:
 			specialBin = ab.massBins[doSpecialOneBinFit]
 			specialBin.initChi2(waveModel)
@@ -310,6 +348,7 @@ def main(rhoFileName = ""):
 				for f in waveModel[k]:
 					print "function parameters",f.getParameters()
 			chi2, params = ab.chi2(returnParameters = True)
+			print params,"params"
 			paramsZ      = ab.linearizeZeroModeParameters(params)
 			ab.setTheoryFromOwnFunctions(params, True)
 			print "The final chi2 =",chi2
@@ -398,8 +437,6 @@ def main(rhoFileName = ""):
 			phasesT.append(pT)
 
 		zeroP = [0.]*len(paramsZ)
-		paramsZ = zeroP
-
 		ab.fillHistograms(paramsZ, intenses            )
 		ab.fillHistograms(paramsZ, reals,  mode = REAL )
 		ab.fillHistograms(paramsZ, imags,  mode = IMAG )
@@ -439,20 +476,19 @@ def main(rhoFileName = ""):
 					break # # # # # # # # # # # # # # # # #
 			ric = correl[i]
  
-			noRun = True
+			noRun = False
 			if not allIsZero:
 				rv = resultViewer([intenses[i], intensD[i], intensT[i]],[reals[i], realsD[i], realsT[i]],[imags[i], imagsD[i], imagsT[i]], [phases[i], phasesD[i], phasesT[i]], startBin = startBin, reImCorrel = ric, noRun = noRun)
 			else:
 				rv = resultViewer([intenses[i], intensD[i]],[reals[i], realsD[i]],[imags[i], imagsD[i]],[phases[i], phasesD[i]], startBin = startBin, reImCorrel = ric, noRun = noRun)
 			rv.titleRight = getProperWaveName(sectors[i])
 			rv.tString    = getProperDataSet(inFileName, tBin)
-			rv.plotCorr   = False
-			rv.plotTheo   = False
-#			rv.run()
-			for j in range(startBin, stopBin):
-				fileName = "./uncorrectedPlots/" + sectors[i] + "_bin" + str(j) + "_tBin"+str(tBin) + ".pdf"
-				rv.writeBinToPdf(j, stdCmd = ["",fileName,[],"",[]])
-
+#			rv.plotCorr   = False
+#			rv.plotTheo   = False
+			rv.run()
+#			for j in range(startBin, stopBin):
+#				fileName = "./uncorrectedPlots/" + sectors[i] + "_bin" + str(j) + "_tBin"+str(tBin) + ".pdf"
+#				rv.writeBinToPdf(j, stdCmd = ["",fileName,[],"",[]])
 
 if __name__ == "__main__":
 	main()

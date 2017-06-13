@@ -6,9 +6,10 @@ import parameterTrackingParameterizations as ptc
 import parameterizationClasses as pc
 from fixedparameterizationPaths import getFileNameForSector
 from modes import PHASE, AMPL, SMOOTH, NONE
-from utils import sumUp, weightedSum, cloneZeros
+from utils import sumUp, weightedSum, cloneZeros, checkLaTeX
 import sys
 import pyRootPwa
+import numpy as np
 
 import consistencyUtils as cu
 
@@ -35,7 +36,7 @@ def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {})
 #	fitRho.removeGlobalPhaseFromComa()
 	return fitRho
 
-def doF0phase(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]0++PiS" : (0., 2*mK - .04)}):
+def doF0phase(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]0++PiS" : (0.34, 2*mK - .04)}):
 	pipiSfileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/zeroModes/bwAmplitudes_noBF/amp_0mp0pSigmaPiS"
 	pipiSw = pc.fixedParameterization(pipiSfileName, polynomialDegree  = 0, complexPolynomial = False)
 	waveModel = {"0-+0+[pi,pi]0++PiS": [pipiSw]}
@@ -44,10 +45,11 @@ def doF0phase(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"
 	fitPiPiSshape.finishModelSetup()
 	fitPiPiSshape.phaseFit()
 	fitPiPiSshape.mode = PHASE
-	fitPiPiSshape.removeGlobalPhaseFromComa()
+#	fitPiPiSshape.removeGlobalPhaseFromComa()
+	fitPiPiSshape.unifyComa()
 	return fitPiPiSshape
 
-alphapet = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
+alphabet = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
 
 def doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
 	waveModel = {}
@@ -98,6 +100,7 @@ def weightedParametersSum(evl, selfEvl, params):
 	return weightedSum(weights, params)
 
 def main():
+	checkLaTeX()
 	style = modernplotting.mpplot.PlotterStyle()
 #	style.p2dColorMap = 'ocean_r'
 #	style.p2dColorMap = 'YlOrRd'
@@ -107,12 +110,12 @@ def main():
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
 	sectors          = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
 	tBins            = [0]
-	startBin         = 35
-	stopBin          = 40
+	startBin         = 12
+	stopBin          = 50
 
 	allMethods       = {}
 	methodStrings    = {}
-	shortlabels       = { "fixedShapeF0"    : r"$\text{fix}_{f_0}^{~}$",
+	shortlabels      = {  "fixedShapeF0"    : r"$\text{fix}_{f_0}^{~}$",
 	                      "fixedShapeRho"   : r"$\text{fix}_\rho^{~}$",
 	                      "fixedShapeRho1G" : r"$\text{fix}_\rho^{1\Gamma}$",
 	                      "fixedShapeRho2G" : r"$\text{fix}_\rho^{2\Gamma}$",
@@ -128,45 +131,45 @@ def main():
 	allMethods["fixedShapeF0"] = fixedShapeF0
 	print "Finished with fixed shape f0"
 
-	print "Starting with fixed shape rho"
-	fixedShapeRho = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins)
-	allMethods["fixedShapeRho"] = fixedShapeRho
-	print "Finished with fixed shape rho"
+#	print "Starting with fixed shape rho"
+#	fixedShapeRho = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins)
+#	allMethods["fixedShapeRho"] = fixedShapeRho
+#	print "Finished with fixed shape rho"
 
-	print "Starting with restricted rho (1 Gamma)"
-	fixedShapeRho1G = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]1--PiP":(mRho - Grho, mRho+Grho)})
-	allMethods["fixedShapeRho1G"] = fixedShapeRho1G
-	print "Finished with restricted rho (1 Gamma)"
+#	print "Starting with restricted rho (1 Gamma)"
+#	fixedShapeRho1G = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]1--PiP":(mRho - Grho, mRho+Grho)})
+#	allMethods["fixedShapeRho1G"] = fixedShapeRho1G
+#	print "Finished with restricted rho (1 Gamma)"
 
-	print "Starting with restricted rho (2 Gammas)"
-	fixedShapeRho2G = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]1--PiP":(mRho -2*Grho, mRho+2*Grho)})
-	allMethods["fixedShapeRho2G"] = fixedShapeRho2G
-	print "Finished with restricted rho (2 Gammas)"
+#	print "Starting with restricted rho (2 Gammas)"
+#	fixedShapeRho2G = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]1--PiP":(mRho -2*Grho, mRho+2*Grho)})
+#	allMethods["fixedShapeRho2G"] = fixedShapeRho2G
+#	print "Finished with restricted rho (2 Gammas)"
 
 	print "Starting with fixed shapes"
 	fixedShapes = doFixedShapes(inFileName, sectors, startBin, stopBin, tBins)
 	allMethods["fixedShapes"] = fixedShapes
 	print "Finished with fixed shapes"
 
-	print "Starting with phase"
-	fitPiPiSshape = doF0phase(inFileName, sectors[:1], startBin, stopBin, tBins)
-	allMethods["pipiS"] = fitPiPiSshape
-	print "Finished with phase"
+#	print "Starting with phase"
+#	fitPiPiSshape = doF0phase(inFileName, sectors[:1], startBin, stopBin, tBins)
+#	allMethods["pipiS"] = fitPiPiSshape
+#	print "Finished with phase"
 
 	print "Starting with fitting rho"
 	fitRho = doFitRho(inFileName, sectors, startBin, stopBin, tBins)
 	allMethods["fitRho"] = fitRho
 	print "Finished with fitting rho"
 
-	print "Starting with fitting restricted rho (1 Gamma)"
-	fitRho1G = doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]1--PiP":(mRho - Grho, mRho+Grho)})
-	allMethods["fitRho1G"] = fitRho1G
-	print "Finished with fitting restricted rho (1 Gamma)"
+#	print "Starting with fitting restricted rho (1 Gamma)"
+#	fitRho1G = doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]1--PiP":(mRho - Grho, mRho+Grho)})
+#	allMethods["fitRho1G"] = fitRho1G
+#	print "Finished with fitting restricted rho (1 Gamma)"
 
-	print "Starting with fitting restricted rho (2 Gammas)"
-	fitRho2G = doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]1--PiP":(mRho -2*Grho, mRho+2*Grho)})
-	allMethods["fitRho2G"] = fitRho2G
-	print "Finished with fitting restricted rho (2 Gammas)"
+#	print "Starting with fitting restricted rho (2 Gammas)"
+#	fitRho2G = doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]1--PiP":(mRho -2*Grho, mRho+2*Grho)})
+#	allMethods["fitRho2G"] = fitRho2G
+#	print "Finished with fitting restricted rho (2 Gammas)"
 
 	if stopBin - startBin > 1:
 		print "Starting with smooth"
@@ -180,15 +183,13 @@ def main():
 		ndfs[m]=  allMethods[m].getNDFforMode()
 		params[m] = allMethods[m].getZeroModeParametersForMode()
 		print m,sumUp(allMethods[m].evaluateZeroModeParametersForMode(params[m])).real/ndfs[m]
-
 	diffs = cu.getmBinResolvedDiffs(allMethods)
 	comps = cu.getCompositions(diffs)
-
 	with  modernplotting.toolkit.PdfWriter("compositions_0mp.pdf") as pdfOutput:
 		plot = style.getPlot1D()
 		for m in comps:
 			line  = [0.]*len(comps[m][0])
-			xAxis = [.5 + 0.04*(startBin + i) for i in range(len(comps[m][0]))]
+			xAxis = [ .5 + 0.04*(startBin + i) for i in range(len(comps[m][0]))]
 			break
 		count = 0
 		for m in comps:
@@ -203,7 +204,6 @@ def main():
 		plot.setYlim(0.,1.)
 		plot.setXlim(xAxis[0], xAxis[-1])
 		pdfOutput.savefigAndClose()
-
 	studyList = []
 	for m in allMethods:
 		studyList.append(m)
@@ -216,9 +216,9 @@ def main():
 	hist = pyRootPwa.ROOT.TH2D("hist","hist", len(params)+2, 0, len(params)+2, len(params), 0, len(params))
 
 	cumulWeights = {}
-	resovedWeightedSum = [[]]
-	dim = len(params[m][0][0])
+	resovedWeightedSum = [[]] # Assumes one t' bin
 	for i in range(stopBin - startBin):
+		dim = len(params[m][0][i])
 		prrs = [0.] * dim
 		for m in params:
 			weight = comps[m][0][i]
@@ -231,8 +231,6 @@ def main():
 				prrs[j] += weight * params[m][0][i][j]
 		resovedWeightedSum[0].append(prrs)
 
-
-
 	evals = {}
 	for i,m in enumerate(studyList):
 #		print "-------------------------------"
@@ -240,9 +238,16 @@ def main():
 			evl = sumUp(allMethods[n].evaluateResolvedZeroModeParametersForMode(params[m])).real
 			evals[n,m] = evl
 			diff = (evl-selfEvals[n])/selfEvals[n]
+			
+#			allMethods["fixedShapes"].removeZeroModeFromComa()
+#			print "------------------------------------IN---------------------------------"
+#			print params[m], params[n]
+#			diff = sumUp(allMethods["fixedShapes"].compareTwoZeroModeCorrections(params[m], params[n]))
+#			print diff
+#			print "------------------------------------OUT---------------------------------"
 #			print m,'in',n,":",diff
 			hist.SetBinContent(i+1, j+1, diff)
-
+#	return 
 	weightedSum = weightedParametersSum(evals, selfEvals, params)
 	for i,m in enumerate(studyList):
 		evl = sumUp(allMethods[m].evaluateZeroModeParametersForMode(weightedSum)).real
@@ -259,7 +264,7 @@ def main():
 	axolotl = []
 	for i,study in enumerate(studyList):
 		axolotl.append(shortlabels[study])
-#		axolotl.append(alphapet[i])
+#		axolotl.append(alphabet[i])
 
 	with modernplotting.toolkit.PdfWriter("studies_0mp.pdf") as pdfOutput:
 		plot = style.getPlot2D()
@@ -275,6 +280,16 @@ def main():
 
 		pdfOutput.savefigAndClose()
 
+	with open("studies_0mp.txt",'w') as out:
+		for axl in axolotl:
+			out.write(axl + ' ')
+		out.write("\n")
+		for i in range(hist.GetNbinsX()):
+			for j in range(hist.GetNbinsY()):
+				out.write(str(hist.GetBinContent(i+1, j+1)) + ' ')
+			out.write('\n')
+
+
 ##### Writing starts here
 
 	fileNames = {}
@@ -282,6 +297,9 @@ def main():
 	for stu in allMethods:
 		print "Writing for '" + stu + "'"
 		for s, sect in enumerate(allMethods[stu].sectors):
+			if stu == "pipiS":
+				rv = allMethods[stu].produceResultViewer(allMethods[stu].getZeroModeParametersForMode(),s, plotTheory = True)
+				rv.run()
 			rv = allMethods[stu].produceResultViewer(allMethods[stu].getZeroModeParametersForMode(),s, noRun = True)
 			for bin in range(startBin, stopBin):
 				fileName = "./collectedMethods/"+stu+"_"+sect+"_0mpMC_"+str(bin)

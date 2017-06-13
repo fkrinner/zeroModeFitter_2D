@@ -143,8 +143,8 @@ class resultViewer:
 		if not len(self.realHists) ==self. nHists or not len(self.imagHists) == self.nHists or not len(self.phaseHists) == self.nHists:
 			raise ValueError("Size of histograms does not match")
 
-		self.corrColor = modernplotting.colors.colorScheme.blue
-		self.theoColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, .5)
+		self.corrColor = modernplotting.colors.colorScheme.green
+		self.theoColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.gray, .2)
 		self.dataColor = modernplotting.colors.colorScheme.red
 		self.addiColor = modernplotting.colors.colorScheme.gray
 
@@ -463,11 +463,11 @@ class resultViewer:
 						addGraphs.append(graph)
 						modernplotting.root.plotTH1D(graph, plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 0, 'color':self.addiColor})
 					if self.plotData:
-						modernplotting.root.plotTH1D(argands[1], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 1, 'color':self.dataColor})
+						modernplotting.root.plotTH1D(argands[1], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 2, 'color':self.dataColor})
 					if len(argands) > 2 and self.plotTheo:
-						modernplotting.root.plotTH1D(argands[2], plot, maskValue = 0.,markerDefinitions = {'marker' : None, 'linestyle' : 'solid', 'zorder' : 2, 'color': self.theoColor})
+						modernplotting.root.plotTH1D(argands[2], plot, maskValue = 0.,markerDefinitions = {'marker' : None, 'linestyle' : 'solid', 'zorder' : 1, 'color': self.theoColor, 'linewidth' : 1.})
 					if self.plotCorr:
-						modernplotting.root.plotTH1D(argands[0], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 3, 'color' : self.corrColor})
+						modernplotting.root.plotTH1D(argands[0], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'marke': None, 'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 3, 'color' : self.corrColor})
 					ranges = setAxesRange(argands[0])
 	#				ranges = getMaximumRanges(argands + addGraphs)
 	#				ranges = ((-500., 500.), (-500., 500.))
@@ -483,13 +483,13 @@ class resultViewer:
 						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 2, 'color':self.addiColor})
 					if self.plotData:
 						X,Y,COMA = self.getArgandData(nBin, 1, getCOMA = False)
-						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 2, 'color':self.dataColor})
+						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 3, 'color':self.dataColor})
 					if self.nHists > 2 and self.plotTheo:
 						X,Y,COMA = self.getArgandData(nBin, 2, getCOMA = False)
-						plot.plot(X, Y, **{'marker' : None, 'markersize' : 0., 'linestyle' : 'solid', 'linewidth' : .7,  'zorder' : 3, 'color': self.theoColor})
+						plot.plot(X, Y, **{'marker' : None, 'markersize' : 0., 'linestyle' : 'solid', 'linewidth' : 1.,  'zorder' : 2, 'color': self.theoColor})
 					if self.plotCorr:
 						X,Y,COMA = self.getArgandData(nBin, 0, getCOMA = True)
-						modernplotting.specialPlots.plotErrorEllipses(plot, X, Y, COMA, markerDefinitions = {'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 1, 'color' : self.corrColor})
+						modernplotting.specialPlots.plotErrorEllipses(plot, X, Y, COMA, markerDefinitions = {'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 1, 'color' : self.corrColor, 'markersize' : 0.})
 						plot.plot(X,Y, **{'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 4, 'color' : self.corrColor})
 					plot.setXlabel(LaTeX_strings.real)
 					plot.setYlabel(LaTeX_strings.imag)
