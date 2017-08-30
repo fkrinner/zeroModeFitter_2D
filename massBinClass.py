@@ -3,11 +3,12 @@ import numpy as np
 import numpy.linalg as la
 import utils
 from utils import getZeroHistSectors, normVector, getZeroModeNumber, printZeroStructure
+import cmath
 from cmath import phase, pi
 from modes import INTENS, PHASE, REAL, IMAG, INTENSNORM, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO, REIMCORRELATION
 
 class massBin:
-	def __init__(self, nBin, realHists, imagHists, normHists, indexHists, coma):
+	def __init__(self, nBin, realHists, imagHists, normHists, indexHists, coma, integralReal = None, integralImag = None):
 		"""
 		Initializer that sets data arrays
 		"""
@@ -41,8 +42,16 @@ class massBin:
 		self.imags      = np.zeros((self.totalBins))
 		self.norms      = np.zeros((self.totalBins))
 		self.coma       = np.zeros((2*self.totalBins,2*self.totalBins))
+		self.hasIntegralMatrix = False
+		if integralReal and integralImag:
+			self.hasIntegralMatrix = True
+			self.integralMatrix    = np.zeros((self.totalBins, self.totalBins), dtype = complex)
+		elif integralReal:
+			raise RuntimeError("Cannot handle real integral matrix only, need also imaginary")
+		elif integralImag:
+			raise RuntimeError("Cannot handle imaginary integral matrix only, need also real")
 		self.binCenters = np.zeros((self.totalBins))
-		self.numLim     = 1.e-11
+		self.numLim     = 1.e-8
 		count = 0
 		for s in range(self.nSect):
 			for bin in range(self.nBins[s]):
@@ -59,6 +68,9 @@ class massBin:
 						self.coma[2*count  , 2*count2+1] = coma.GetBinContent(2*comaIndex+1, 2*comaIndex2+2)
 						self.coma[2*count+1, 2*count2  ] = coma.GetBinContent(2*comaIndex+2, 2*comaIndex2+1)
 						self.coma[2*count+1, 2*count2+1] = coma.GetBinContent(2*comaIndex+2, 2*comaIndex2+2)
+						if self.hasIntegralMatrix:
+							val = integralReal.GetBinContent(comaIndex+1, comaIndex2+1) + 1.j*integralImag.GetBinContent(comaIndex+1, comaIndex2+1)
+							self.integralMatrix[count,count2] = val
 						count2 += 1
 				count +=1
 		self.makeComaInv()
@@ -74,7 +86,82 @@ class massBin:
 		self.hasMassRange    = False
 		self.chi2init        = False
 		self.zeroModesRemovedFromComa = False
-		self.specialCOMAs    = { }
+		self.specialCOMAs             = { }
+		self.hasZMP                   = False
+		self.zeroModeParameters       = None
+
+	def getSectorTotals(self, parameters, binRange = {}, zeroModeSubtract = False):
+		if not self.hasIntegralMatrix:
+			raise RuntimeError("Cannot construct totals without integral matrix")
+		ampls        = self.getCorrectedAmplitudes(parameters)
+		if not binRange == {}:
+			for s in range(self.nSect):
+				sect = self.sectors[s]
+				if not sect in binRange:
+					continue
+				startBin = self.borders[s]
+				stopBin  = self.borders[s+1]
+				count    = 0
+				rang     = range(binRange[sect][0], binRange[sect][1])
+				for b in range(startBin, stopBin):
+					if not count in rang:
+						ampls[2*b  ] = 0.
+						ampls[2*b+1] = 0.
+					count += 1
+		amplsComplex = np.zeros((len(ampls)/2), dtype = complex)
+		realizedMatrix = np.zeros((len(ampls), len(ampls)))
+		for i in range(len(ampls)/2):
+			amplsComplex[i] = ampls[2*i] + 1.j*ampls[2*i+1]
+			for j in range(len(ampls)/2):
+				matrixValue =  self.integralMatrix[i,j]
+				realizedMatrix[2*i  ,2*j  ] = matrixValue.real
+				realizedMatrix[2*i  ,2*j+1] = matrixValue.imag
+				realizedMatrix[2*i+1,2*j  ] =-matrixValue.imag
+				realizedMatrix[2*i+1,2*j+1] = matrixValue.real
+		realizedMatrix = realizedMatrix + np.transpose(realizedMatrix)
+		totals = []
+		for s in range(self.nSect):
+			startBin = self.borders[s  ]
+			stopBin  = self.borders[s+1]
+			total = 0.
+			amplsForErrors = np.zeros((len(ampls)))
+			for i in range(startBin, stopBin):
+				amplsForErrors[2*i  ] = ampls[2*i  ]
+				amplsForErrors[2*i+1] = ampls[2*i+1]
+				for j in range(startBin, stopBin):
+					total += amplsComplex[i].conjugate() * self.integralMatrix[i,j] * amplsComplex[j]
+				transformationMatrix = np.identity(len(self.coma))
+				if zeroModeSubtract:
+					transformationMatrix = np.zeros((len(self.coma),len(self.coma)))
+					for z in range(self.nZero):
+						z2 =0.
+						for i in range(startBin, stopBin):
+							if ampls[2*i] == 0.and ampls[2*i+1] == 0.:
+								continue
+							z2 += self.zeroModes[z][i]
+						if z2 == 0.:
+							continue
+						for i in range(startBin, stopBin):
+							if ampls[2*i] == 0. and ampls[2*i+1] == 0.:
+								continue
+							transformationMatrix[2*i  ,2*i  ] += 1.
+							transformationMatrix[2*i+1,2*i+1] += 1.
+							for j in range(startBin,stopBin):
+								if ampls[2*j] == 0. and ampls[2*j+1] == 0.:
+									continue
+								transformationMatrix[2*i  ,2*j  ] -= self.zeroModes[z][i]*self.zeroModes[z][j]/z2
+								transformationMatrix[2*i+1,2*j+1] -= self.zeroModes[z][i]*self.zeroModes[z][j]/z2
+							
+			if abs(total.imag) > self.numLim:
+				raise ValueError("Total has non-vanishing imag part: " + str(total))
+			jacobian = np.dot(realizedMatrix, amplsForErrors)
+#			print '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
+#			print self.coma
+#			print '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
+			err = np.dot(jacobian, np.dot(np.dot(np.dot(transformationMatrix,self.coma),transformationMatrix), jacobian))**.5
+			totals.append((total, err))
+#		print totals,'************************+*****************'
+		return totals
 
 	def initChi2(self, sectorFuncMap):
 		"""
@@ -104,12 +191,53 @@ class massBin:
 		if len(pars) > 0:
 			self.setShapeParameters(pars)
 		A,B,C = self.getOwnTheoryABC()
-		pars  = -np.dot(B, la.pinv(A + np.transpose(A)))
-		chi2  = np.dot(pars,np.dot(A,pars)) + np.dot(pars,B) + C
+		zmPars  = -np.dot(B, utils.pinv(A + np.transpose(A)))
+		chi2  = np.dot(zmPars,np.dot(A,zmPars)) + np.dot(zmPars,B) + C
+
 		if returnParameters:
-			return chi2, pars
+			return chi2, zmPars
 		else:
 			return chi2
+
+	def fixedZMPchi2(self, pars):
+		"""
+		Returns a chi2 for the shape parameters and self.zeroModeParameters. The couplings are calculated.
+		"""
+		if not self.hasZMP and self.nZero > 0:
+			raise RuntimeError("No zero mode parameters set")
+		self.setShapeParameters(pars)
+		a,b,c = self.getOwnTheoryABC()
+		A     = np.zeros((2*self.nFunc, 2*self.nFunc))
+		B     = np.zeros((2*self.nFunc))
+		C     = c
+		for i in range(2*self.nZero):
+			C    += b[i]*self.zeroModeParameters[i]
+			for j in range(2*self.nZero):
+				C += self.zeroModeParameters[i]*self.zeroModeParameters[j]*a[i,j]
+		for i in range(2*self.nFunc):
+			B[i] += b[2*self.nZero+i]
+			for j in range(2*self.nZero):
+				B[i] += (a[2*self.nZero+i,j]+a[j,2*self.nZero+i])*self.zeroModeParameters[j]
+			for j in range(2*self.nFunc):
+				A[i,j] += a[2*self.nZero + i, 2*self.nZero+j]
+		couplings = -np.dot(B, la.pinv(np.transpose(A) + A))
+		return np.dot(couplings, np.dot(A,couplings)) + np.dot(B,couplings) + C
+
+
+
+	def getNonShapeUncertainties(self, pars = []):
+		"""
+		Gets the unceratinties on non-shape parameters at the minimum of chi2(...)
+		"""
+		if not self.chi2init:
+			raise RuntimeError("Chi2 not initialized, cannot evaluate")
+		if len(pars) > 0:
+			self.setShapeParameters(pars)
+		A,B,C = self.getOwnTheoryABC()
+		unc = []
+		for i in range(len(A)):
+			unc.append(A[i,i]**-.5)
+		return unc
 
 	def compareTwoZeroModeCorrections(self, params1, params2):
 		"""
@@ -244,6 +372,15 @@ class massBin:
 			for f in self.funcs[s]:
 				f.setParameters(pars[countPar:countPar + f.nPar])
 				countPar += f.nPar
+
+	def setZeroModeParameters(self, zmp):
+		"""
+		Sets fixed zero mode parameters
+		"""
+		if not len(zmp) == 2*self.nZero:
+			raise IndexError("Number of zero mode parameters does not match")
+		self.hasZMP             = True
+		self.zeroModeParameters = zmp
 
 	def setParametersAndErrors(self, pars, errors):
 		"""
@@ -396,6 +533,7 @@ class massBin:
 		"""
 		Removes the dorection of the zero-mode from the covariance matrix
 		"""
+#		print 'Remove zm'
 		if len(self.zeroModes) == 0:
 			return
 		dim = len(self.coma)
@@ -405,10 +543,17 @@ class massBin:
 				for j in range(dim/2):
 					transformationMatrix[2*i  ,2*j  ] -= self.zeroModes[z][i] * self.zeroModes[z][j]
 					transformationMatrix[2*i+1,2*j+1] -= self.zeroModes[z][i] * self.zeroModes[z][j]
+#		print self.coma
+#		print '-------------------------------------'
 		self.coma         = np.dot(transformationMatrix, np.dot(self.coma, transformationMatrix)) # no transpose needed, since transformationMatrix is symmetric
+#		print self.coma
+#		print '=========================================================='
+#		print '=========================================================='
+#		print '=========================================================='
 		self.makeComaInv()
 		self.specialCOMAs = {}
 		self.zeroModesRemovedFromComa = True
+#		self.zeroModeMultiplicationCheck()
 
 	def zeroModeMultiplicationCheck(self, coeff = 1.):
 		"""
@@ -593,6 +738,7 @@ class massBin:
 		self.zeroModeTitles.append(modeHist.GetTitle())
 		self.zeroModes.append(newMode)
 		self.nZero = len(self.zeroModes)
+
 		return True
 
 	def getTheoryABC(self, sector, parametrizations, massRange = None):
@@ -751,6 +897,14 @@ class massBin:
 			retVal += Cother
 		return retVal
 
+	def fillTotal(self, param, hists, binRange = {}):
+		if not len(hists) == self.nSect:
+			raise IndexError("Number of histograms does not match the number of sectors")
+		totals = self.getSectorTotals(param, binRange = binRange)
+		for s in range(self.nSect):
+			hists[s].SetBinContent(self.bin3pi+1, totals[s][0])
+			hists[s].SetBinError(self.bin3pi+1, totals[s][1])
+
 	def fillHistograms(self, params, hists, mode = INTENS):
 		"""
 		Fill coorespi=onding m3pi bin of 2D histograms
@@ -819,7 +973,11 @@ class massBin:
 		"""
 		Rotates the global phase, that the phase of nBin is zero
 		"""	
-		ampl = self.reals[nBin] - 1.j*self.imags[nBin]
+		ampl = self.reals[nBin] + 1.j*self.imags[nBin]
+		self.removePhase(ampl)
+
+	def removePhase(self, amp):
+		ampl = amp.real -1.j*amp.imag
 		ampl/= abs(ampl)
 		re = ampl.real
 		im = ampl.imag

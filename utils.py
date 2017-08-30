@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.linalg as la
 import os, sys 
+import pyRootPwa
 
 numLim = 1.E-10
 INF = float("inf")
@@ -194,7 +195,7 @@ def cloneZeros(lst):
 			retVal.append(0.)
 	return retVal
 
-def addBtoA(A,B, weight = 1.):
+def addBtoA(A,B, weight = 1., noBelowZero = False):
 	"""
 	Adds the entries od array B at the corresponding palces of the equal shaped array A, unsing the weight as factor
 	"""
@@ -202,8 +203,10 @@ def addBtoA(A,B, weight = 1.):
 		raise ValueError("addBtoA(...): Size mismatch ('" + str(len(A)) + "' != '" + str(len(B)) + "')" )
 	for i in range(len(A)):
 		if hasattr(A[i], '__len__'):
-			addBtoA(A[i],B[i], weight)
+			addBtoA(A[i],B[i], weight, noBelowZero = noBelowZero)
 		else:
+			if noBelowZero and B[i] < 0.:
+				continue
 			A[i] += weight*B[i]
 
 def divideAbyB(A,B, ignoreZero = False):
@@ -263,6 +266,38 @@ def checkLaTeX():
 	"""
 	if not "/nfs/mnemosyne/sys/slc6/contrib/texlive/2013/bin/x86_64-linux" in os.environ["PATH"]:
 		raise RuntimeError("LaTeX not set correctly, aborting")
+
+globalHistCount = 0
+def get3PiHistogram(name = ""):
+	if name == "":
+		global globalHistCount
+		name = "hist_"+str(globalHistCount)
+		globalHistCount += 1
+	hist = pyRootPwa.ROOT.TH1D(name, name, 50, 0.5,2.5)
+	hist.SetDirectory(0)
+	return hist
+
+def loadAmplsTM(inFileName):
+	"""
+	Loads amplitudes from a text file with lines: tBin mBin real imag
+	Assumes four t' bins and 50 m bins
+	"""
+	ampls = [[0. for _ in range(50)] for __ in range(4)]
+	with open(inFileName, 'r') as inin:
+		count = 0
+		for line in inin.readlines():
+			chunks = line.split()
+			tBin   = int(chunks[0])
+			mBin   = int(chunks[1])
+			real   = float(chunks[2])
+			imag   = float(chunks[3])
+			if not ampls[tBin][mBin] == 0.:
+				raise ValueError("Amplitude for "+str(tBin)+" "+str(mBin)+"set twice")
+			ampls[tBin][mBin] = real + 1.j*imag
+			count += 1
+	if not count == 200:
+		raise ValueError("Not all amplitudes set")
+	return ampls
 
 
 def main():

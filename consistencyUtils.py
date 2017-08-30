@@ -32,24 +32,24 @@ def getCompositions(diffs):
 		if not pair[0] in lst:
 			lst.append(pair[0])
 	diffSums = {}
-	totals = None
+	totals   = None
 	for m in lst:
 		diffSum = cloneZeros(diffs[m,m])
 		if not totals:
 			totals = cloneZeros(diffs[m,m])
 		for n in lst:
-			addBtoA(diffSum, diffs[n,m])
+			addBtoA(diffSum, diffs[n,m], noBelowZero = True)
 		diffSums[m] = diffSum
 	for m in lst:
 		invertAllEntries(diffSums[m], nanToZero = True)
-#	print diffSums
+
 	for m in lst:
 		addBtoA(totals, diffSums[m])
 	for m in lst:
 		divideAbyB(diffSums[m], totals, ignoreZero = True)
 	return diffSums
 	
-def doAllComparisons(methodMap, startBin, methodBinRanges = {}):
+def doAllComparisons(methodMap, startBin, methodBinRanges = {}, noBelowZero = False):
 	"""
 	Does everything theo toher methods do, bit with the possibility of restricted ranged for several methods
 	Start bin has to be given to match the bin ranges, parameters are just counted in the methods
@@ -58,6 +58,11 @@ def doAllComparisons(methodMap, startBin, methodBinRanges = {}):
 	evals  = {}
 	for m in methodMap:
 		params[m] = methodMap[m].getZeroModeParametersForMode()
+
+#		for mb in params[m][0]:
+#			print len(mb),
+#		print "<-----",m
+
 		for n in methodMap:
 			evals[n,m] = methodMap[n].evaluateResolvedZeroModeParametersForMode(params[m])
 	diffs         = {}
@@ -105,11 +110,13 @@ def doAllComparisons(methodMap, startBin, methodBinRanges = {}):
 					if n in methodBinRanges:
 						if nBin < methodBinRanges[n][0] or nBin >= methodBinRanges[n][1]:
 							continue
-					totalDiff    += (evals[n,m][tBin][mBin] - evals[n,n][tBin][mBin])/evals[n,n][tBin][mBin]
+					toadd = (evals[n,m][tBin][mBin] - evals[n,n][tBin][mBin])/evals[n,n][tBin][mBin]
+					if not toadd < 0. or not noBelowZero:
+						totalDiff    += toadd
 					totalDiffNon += diffs[n,m]
 				for i in range(len(resolvedWA[tBin][mBin])):
+
 					resolvedWA[tBin][mBin][i] += params[m][tBin][mBin][i]/totalDiff
-#					print ",,,,",params[m][tBin][mBin],resolvedWA[tBin][mBin]
 					nonResolvedWA[tBin][mBin][i] += params[m][tBin][mBin][i]/totalDiffNon
 				totalWeight    += 1./totalDiff
 				totalWeightNon += 1./totalDiffNon
@@ -122,11 +129,14 @@ def doAllComparisons(methodMap, startBin, methodBinRanges = {}):
 				
 	resolvedWAdiffs    = {}
 	nonResovledWAdiffs = {}
+	noCorrDiffs        = {}
 	for m in methodMap:
 		resEvals = methodMap[m].evaluateResolvedZeroModeParametersForMode(resolvedWA)
 		nonEvals = methodMap[m].evaluateResolvedZeroModeParametersForMode(nonResolvedWA)
+		zerEvals = methodMap[m].evaluateResolvedZeroModeParametersForMode(cloneZeros(nonResolvedWA))
 		aSumRes = 0.
 		aSumNon = 0.
+		aSumZer = 0.
 		oSum    = 0.
 		resolvedDiffs[m,"WAres"] = []
 		resolvedDiffs[m,"WAnon"] = []
@@ -144,8 +154,10 @@ def doAllComparisons(methodMap, startBin, methodBinRanges = {}):
 				resolvedDiffs[m,"WAnon"][tBin].append((nonEvals[tBin][mBin]-evals[m,m][tBin][mBin])/evals[m,m][tBin][mBin])
 				aSumRes += resEvals[tBin][mBin]
 				aSumNon += nonEvals[tBin][mBin]
+				aSumZer += zerEvals[tBin][mBin]
 				oSum    += evals[m,m][tBin][mBin]
 		resolvedWAdiffs[m]    = (aSumRes-oSum)/oSum
 		nonResovledWAdiffs[m] = (aSumNon-oSum)/oSum
-	return diffs, resolvedWA, nonResolvedWA, compositions, resolvedWAdiffs, nonResovledWAdiffs, resolvedDiffs
+		noCorrDiffs[m]        = (aSumZer-oSum)/oSum
+	return diffs, resolvedWA, nonResolvedWA, compositions, resolvedWAdiffs, nonResovledWAdiffs, resolvedDiffs,noCorrDiffs
 

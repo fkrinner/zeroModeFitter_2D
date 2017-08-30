@@ -26,10 +26,20 @@ Grho     =  .1491
 mF2 = 1.2751
 GF2 = 0.1851
 
+intensWeight = False
+reweightInverseBW = False 
+
 def doFitRhoP(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
-	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
+#	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
+	binning  = [0.278, 0.32, 0.36, 0.4 , 0.44, 0.48, 0.52, 0.56, 0.6 , 0.64, 0.68, 0.7 , 0.72,
+	            0.74 , 0.76, 0.78, 0.8 , 0.82, 0.84, 0.86, 0.88, 0.9 , 0.92, 0.96, 1.0 , 1.04, 
+	            1.08 , 1.12, 1.16, 1.2 , 1.24, 1.28, 1.32, 1.36, 1.4 , 1.44, 1.48, 1.52, 1.56, 
+	            1.6  , 1.64, 1.68, 1.72, 1.76, 1.8 , 1.84, 1.88, 1.92, 1.96, 2.0 , 2.04, 2.08, 
+	            2.12 , 2.16, 2.2 , 2.24, 2.28]
+
+	rho = ptc.integratedRelativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, binning, intensWeight = intensWeight, fitPr = False, reweightInverseBW = reweightInverseBW)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"2-+0+[pi,pi]1--PiP":[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
 	fitRho.loadData()
 	fitRho.finishModelSetup()
@@ -42,7 +52,14 @@ def doFitRhoP(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}
 def doFitRhoF(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
-	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 3, False)
+#	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 3, False)
+	binning  = [0.278, 0.32, 0.36, 0.4 , 0.44, 0.48, 0.52, 0.56, 0.6 , 0.64, 0.68, 0.7 , 0.72,
+	            0.74 , 0.76, 0.78, 0.8 , 0.82, 0.84, 0.86, 0.88, 0.9 , 0.92, 0.96, 1.0 , 1.04, 
+	            1.08 , 1.12, 1.16, 1.2 , 1.24, 1.28, 1.32, 1.36, 1.4 , 1.44, 1.48, 1.52, 1.56, 
+	            1.6  , 1.64, 1.68, 1.72, 1.76, 1.8 , 1.84, 1.88, 1.92, 1.96, 2.0 , 2.04, 2.08, 
+	            2.12 , 2.16, 2.2 , 2.24, 2.28]
+
+	rho = ptc.integratedRelativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 3, binning, intensWeight = intensWeight, fitPr = False, reweightInverseBW = reweightInverseBW)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"2-+0+[pi,pi]1--PiF":[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
 	fitRho.loadData()
 	fitRho.finishModelSetup()
@@ -55,8 +72,16 @@ def doFitRhoF(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}
 def doFitBothRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
-	rhoP = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
-	rhoF = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 3, False)
+	#rhoP = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
+	#hoF = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 3, False)
+	binning  = [0.278, 0.32, 0.36, 0.4 , 0.44, 0.48, 0.52, 0.56, 0.6 , 0.64, 0.68, 0.7 , 0.72,
+	            0.74 , 0.76, 0.78, 0.8 , 0.82, 0.84, 0.86, 0.88, 0.9 , 0.92, 0.96, 1.0 , 1.04, 
+	            1.08 , 1.12, 1.16, 1.2 , 1.24, 1.28, 1.32, 1.36, 1.4 , 1.44, 1.48, 1.52, 1.56, 
+	            1.6  , 1.64, 1.68, 1.72, 1.76, 1.8 , 1.84, 1.88, 1.92, 1.96, 2.0 , 2.04, 2.08, 
+	            2.12 , 2.16, 2.2 , 2.24, 2.28]
+
+	rhoP = ptc.integratedRelativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, binning, intensWeight = intensWeight, fitPr = False, reweightInverseBW = reweightInverseBW)
+	rhoF = ptc.integratedRelativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 3, binning, intensWeight = intensWeight, fitPr = False, reweightInverseBW = reweightInverseBW)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"2-+0+[pi,pi]1--PiP":[rhoP], "2-+0+[pi,pi]1--PiF" : [rhoF]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
 	fitRho.loadData()
 	fitRho.finishModelSetup()
@@ -69,7 +94,14 @@ def doFitBothRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap =
 def doFitF2(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
 	f2Mass  = ptc.parameter( mF2,  "f2Mass" )
 	f2Width = ptc.parameter( GF2 , "f2Width")
-	f2 = ptc.relativisticBreitWigner([f2Mass,f2Width], mPi, mPi, mPi, 2, 0, False)
+	binning = [ 0.278,0.32, 0.36, 0.4,  0.44, 0.48, 0.52, 0.56, 0.6,  0.64, 0.68, 
+                             0.72, 0.76, 0.8,  0.84, 0.88, 0.92, 0.96, 1.0,  1.04, 1.08, 1.12, 
+                             1.16, 1.18, 1.2,  1.22, 1.24, 1.26, 1.28, 1.30, 1.32, 1.34, 1.36, 
+                             1.38, 1.4,  1.44, 1.48, 1.52, 1.56, 1.6,  1.64, 1.68, 1.72, 1.76, 
+                             1.8,  1.84, 1.88, 1.92, 1.96, 2.0,  2.04, 2.08, 2.12, 2.16, 2.2,
+                             2.24, 2.28]
+#	f2 = ptc.relativisticBreitWigner([f2Mass,f2Width], mPi, mPi, mPi, 2, 0, False)
+	f2 = ptc.integratedRelativisticBreitWigner([f2Mass,f2Width], mPi, mPi, mPi, 2, 0, binning, intensWeight = intensWeight, fitPr = False, reweightInverseBW = reweightInverseBW)
 	fitF2 = amplitudeAnalysis(inFileName, sectors, {"2-+0+[pi,pi]2++PiS":[f2]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
 	fitF2.loadData()
 	fitF2.finishModelSetup()
@@ -154,7 +186,7 @@ def main():
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
 	sectors          = ["2-+0+[pi,pi]0++PiD", "2-+0+[pi,pi]1--PiP", "2-+0+[pi,pi]1--PiF", "2-+0+[pi,pi]2++PiS"]
 	tBins            = [0]
-	startBin         = 12
+	startBin         = 11
 	stopBin          = 50
 
 	methodBinRanges = {
@@ -241,12 +273,13 @@ def main():
 		allMethods["smooth"] = smooth
 		print "Finished with smooth"
 
+
 	if "fixedShapeRhoF" in allMethods:
 		allMethods["fixedShapeRhoF"].setZeroModeSignature(fullSig,1)
 	if "fitRhoF" in allMethods:
 		allMethods["fitRhoF"].setZeroModeSignature(fullSig,1)
 
-	diffsFull, resolvedWA, nonResolvedWA, comps, resDiffs, nonResDiffs, resolvedDiffsFull = cu.doAllComparisons(allMethods, startBin, methodBinRanges)
+	diffsFull, resolvedWA, nonResolvedWA, comps, resDiffs, nonResDiffs, resolvedDiffsFull,noCorrDiffs = cu.doAllComparisons(allMethods, startBin, methodBinRanges)
 #	print resolvedDiffsFull
 	from math import isnan
 	for pair in resolvedDiffsFull:
@@ -281,7 +314,7 @@ def main():
 		studyList.append(m)
 	studyList.sort()
 
-	with  modernplotting.toolkit.PdfWriter("compositions_2mp.pdf") as pdfOutput:
+	with  modernplotting.toolkit.PdfWriter("compositions_2mp_MC.pdf") as pdfOutput:
 		plot = style.getPlot1D()
 		for m in studyList:
 			line  = [0.]*len(comps[m][0])
@@ -307,13 +340,16 @@ def main():
 		for j,n in enumerate(studyList):
 			hist.SetBinContent(i+1, j+1, diffsFull[n,m])
 	for i,m in enumerate(studyList):
-		hist.SetBinContent(len(studyList)+1, i+1, nonResDiffs[m])
+		hist.SetBinContent(len(studyList)+1, i+1, noCorrDiffs[m])
 		hist.SetBinContent(len(studyList)+2, i+1, resDiffs[m])
 
 	axolotl = []
 	for i,study in enumerate(studyList):
 		axolotl.append(shortlabels[study])
 #		axolotl.append(alphabet[i])
+
+	style.titleRight = r"$2^{-+}0^+$"
+	style.titleLeft  = r"Monte Carlo"
 
 	with modernplotting.toolkit.PdfWriter("studies_2mp.pdf") as pdfOutput:
 		plot = style.getPlot2D()
@@ -322,7 +358,7 @@ def main():
 		studyPlotter.makeValuePlot(plot, hist)
 		
 		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(r"$\Sigma$")
+		axolotl.append(r"$\vec 0$")
 		axolotl.append(r"$\Omega$")
 		plot.axes.set_xticklabels(axolotl, rotation = 90)
 		plot.setZlim((0.,1.))
@@ -338,6 +374,7 @@ def main():
 				out.write(str(hist.GetBinContent(i+1, j+1)) + ' ')
 			out.write('\n')
 
+	return
 
 ##### Writing starts here
 
@@ -361,7 +398,7 @@ def main():
 		allMethods['fixedShapes'].removeZeroModeFromComa()
 		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
 		rv = allMethods['fixedShapes'].produceResultViewer(resolvedWA,s, noRun = True, plotTheory = True)
-		rv.writeBinToPdf(startBin, stdCmd = ["./comparisonResults/" + sect + "_MC_2D.pdf", "", [], "", []])
+		rv.writeBinToPdf(startBin, stdCmd = ["./comparisonResultsData/" + sect + "_MC_2D_"+str(tBin)+".pdf", "", [], "", []])
 		for b in range(startBin, stopBin):
 			intensNames = [name+".intens" for name in fileNames[sect,b]]
 			argandNames = [name+".argand" for name in fileNames[sect,b]]

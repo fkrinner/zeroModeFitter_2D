@@ -96,6 +96,31 @@ class tBinHolder:
 			count += nNon
 		return chi2
 
+	def fixedZMPchi2(self, pars):
+		"""
+		Returns a chi2 for the shape parameters and self.zeroModeParameters. The couplings are calculated. Sums over all bins in self.binsToEvaluate
+		"""
+		if len(self.binsToEvaluate) == 0:
+			raise RuntimeError("No bins to evaluate set")
+		chi2 = 0.
+		for i in self.binsToEvaluate:
+			chi2 += self.bins[i].fixedZMPchi2(pars)
+		return chi2
+
+	def setBinsToEvalueate(self, tBinsToEvaluate,mBinsToEvaluate):
+		self.binsToEvaluate = tBinsToEvaluate
+		for bin in self.bins:
+			bin.setBinsToEvalueate(mBinsToEvaluate)
+
+	def setZeroModeParameters(self, zmp):
+		"""
+		Sets zero mode parameters
+		"""
+		if not len(zmp) == len(self.bins):
+			raise IndexError("Mismatch in number of t' bins")
+		for i,pp in enumerate(zmp):
+			self.bins[i].setZeroModeParameters(pp)
+	
 	def __getitem__(self, index):
 		"""
 		Enables looping through this class

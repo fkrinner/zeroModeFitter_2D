@@ -4,7 +4,7 @@ import numpy.linalg as la
 from allBinsClass import allBins
 from modes import PHASE, AMPL, SMOOTH, NONE, REAL, IMAG, REIMCORRELATION, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO
 import os, sys
-from utils import zeroForSectors, getZeroHistBorders, sumUp, INF, renormToBinWidth, divideAbyB
+from utils import zeroForSectors, getZeroHistBorders, sumUp, INF, renormToBinWidth, divideAbyB, get3PiHistogram
 import parameterTrackingParameterizations as ptc
 import scipy.optimize
 from removeZeroModes import removeCertainZeroModes
@@ -12,19 +12,25 @@ from tBinHolder import tBinHolder
 from random import random
 from LaTeX_strings import getProperWaveName, getProperDataSet
 from resultViewerClass import resultViewer
+from utils import loadAmplsTM
+from estimateErrors import estimateErrors,estimateErrors2
 
 class amplitudeAnalysis:
 	"""
 	Class holding all information to fix zero mode coefficients in several ways
 	and do this consistently
 	"""
-	def __init__(self, inFileName, sectors, waveModel, startBin, stopBin, tBins, sectorRangeMap = {}):
+	def __init__(self, inFileName, sectors, waveModel, startBin, stopBin, tBins, sectorRangeMap = {}, zeroFileName = ""):
 		"""
 		Simple contructor
 		"""
 		self.inFileName = inFileName
+		if zeroFileName == "":
+			self.zeroFileName = inFileName
+		else:
+			self.zeroFileName = zeroFileName
 		if not os.path.isfile(inFileName):
-			raise IOError("File '" + inFileName + "' does not exitst")
+			raise IOError("File '" + inFileName + "' does not exist")
 		self.sectors        = sectors
 		self.sectorRangeMap = sectorRangeMap
 		self.waveModel      = waveModel
@@ -49,12 +55,35 @@ class amplitudeAnalysis:
 		"""
 		self.flags[flag] = True
 
-	def loadData(self):
+	def fitShapeParametersForBinRange(self, startPars, tBinsToEvaluate, mBinsToEvaluate, zeroModeParameters = []):
+		if len(zeroModeParameters) > 0:
+			self.setZeroModeParameters(zeroModeParameters)
+		self.model.setBinsToEvalueate(tBinsToEvaluate,mBinsToEvaluate)
+		pars = startPars[:]
+		res       = scipy.optimize.minimize(self.model.fixedZMPchi2, pars)
+		hi        = res.hess_inv
+		errs      = []
+		startErrs = []
+		pars = res.x[:]
+		for i in range(len(res.x)):
+#			print hi[i,i],"::::::::::::::::::::{{}"
+			errs.append((2.*hi[i,i])**.5)
+		errs = estimateErrors2(self.model.chi2, pars, errs)
+		return res.x, errs
+
+
+	def setZeroModeParameters(self,params):
+		self.model.setZeroModeParameters(params)
+
+	def loadData(self, loadIntegrals = False, phaseFile = ""):
 		"""
 		Loads the rquired data from a ROOT file
 		"""
-		with root_open(self.inFileName, "READ") as inFile:
-			for tBin in self.tBins:
+		if not phaseFile == "":
+			phaseAmplitudes = loadAmplsTM(phaseFile)
+
+		for tBin in self.tBins:
+			with root_open(self.inFileName, "READ") as inFile:
 				histNames = GetKeyNames(inFile)
 				histListReal = []
 				histListImag = []
@@ -64,39 +93,55 @@ class amplitudeAnalysis:
 					realHistName = sector+"_"+str(tBin)+"_real"
 					histReal = inFile.Get(realHistName)
 					if not histReal:
-						raise IOError("Could not get '" + realHistName + "' from '" + inFileName + "'")
+						raise IOError("Could not get '" + realHistName + "' from '" + self.inFileName + "'")
 					histListReal.append(histReal)
 
 					imagHistName = sector+"_"+str(tBin)+"_imag"
 					histImag = inFile.Get(imagHistName)
 					if not histImag:
-						raise IOError("Could not get '" + imagHistName + "' from '" + inFileName + "'")
+						raise IOError("Could not get '" + imagHistName + "' from '" + self.inFileName + "'")
 					histListImag.append(histImag)
 
 					normHistName = sector+"_"+str(tBin)+"_norm"
 					histNorm = inFile.Get(normHistName)
 					if not histNorm:
-						raise IOError("Could not get '" + normHistName + "' from '" + inFileName + "'")
+						raise IOError("Could not get '" + normHistName + "' from '" + self.inFileName + "'")
 					histListNorm.append(histNorm)
 
 					indexHistName = sector+"_"+str(tBin)+"_index"
 					histIndx = inFile.Get(indexHistName)
 					if not histIndx:
-						raise IOError("Could not get '" + indexHistName + "' from '" + inFileName + "'")
+						raise IOError("Could not get '" + indexHistName + "' from '" + self.inFileName + "'")
 					histListIndx.append(histIndx)
 				histsToFill = []
 				comaHists = []
+				intHistsReal = []
+				intHistsImag = []
 				for mBin in range(self.startBin, self.stopBin):
 					comaHistName = "COMA_"+str(tBin)+"_"+str(mBin)
 					comaHist = inFile.Get(comaHistName)
 					if not comaHist:
-						raise IOError("Could not get '" + comaHistName + "' from '" + inFileName + "'")
+						raise IOError("Could not get '" + comaHistName + "' from '" + self.inFileName + "'")
 					comaHists.append(comaHist)
-				ab = allBins(self.startBin, self.stopBin, histListReal, histListImag, histListNorm, histListIndx, comaHists)
+					if loadIntegrals:
+						realHistName = "INTEGRAL_r_"+str(tBin)+"_"+str(mBin)
+						realHist = inFile.Get(realHistName)
+						if not realHist:
+							raise IOError("Could not get '" + realHistName + "' from '" + self.inFileName + "'")
+						intHistsReal.append(realHist)
+						imagHistName = "INTEGRAL_i_"+str(tBin)+"_"+str(mBin)
+						imagHist = inFile.Get(imagHistName)
+						if not imagHist:
+							raise IOError("Could not get '" + imagHistName + "' from '" + self.inFileName + "'")
+						intHistsImag.append(imagHist)
+
+
+				ab = allBins(self.startBin, self.stopBin, histListReal, histListImag, histListNorm, histListIndx, comaHists,intHistsReal,intHistsImag)
 				for h in histListReal:
 					h.SetDirectory(0)
 
 				self.histListReal = histListReal
+			with root_open(self.zeroFileName, "READ") as inFile:
 				zeroCount = 0
 				zeroHistList  = []
 				eigenHistList = []
@@ -121,8 +166,38 @@ class amplitudeAnalysis:
 				for zeroHist in zeroHistList:
 					borders = getZeroHistBorders(zeroHist)
 					ab.addZeroMode(borders, zeroHist)
+				if not phaseFile == "":
+					ab.removePhases(phaseAmplitudes[tBin][self.startBin:self.stopBin])
 				self.model.addBin(ab)
 			self.SET('loaded')
+
+	def writeZeroModeCoefficients(self, fileName, coeffs, tIn):
+		if not len(self.model) == len(coeffs):
+			raise ValueError("Dimension mismatch on t level")
+		for t,tBin in enumerate(self.model):
+			ccc = []
+			for p in coeffs[t]:
+				for v in p:
+					ccc.append(v)
+			tBin.writeZeroModeCoefficients(ccc, fileName, str(tIn))
+
+	def getTotalHists(self, params, binRange = {}):
+		hists = []
+		for t, tBin in enumerate(self.model):
+			tLine = []
+			for m in range(len(self.sectors)):
+				tLine.append(get3PiHistogram(self.sectors[m] + "_t"+ str(self.tBins[t])))
+			hists.append(tLine)
+		self.fillTotal(params, hists, binRange = binRange)
+		return hists
+
+	def fillTotal(self, params, hists, binRange = {}):
+		for t,tBin in enumerate(self.model):
+			linPar = []
+			for m in params[t]:
+				for v in m:
+					linPar.append(v)
+			tBin.fillTotal(linPar, hists[t], binRange = binRange)
 
 	def getZeroModeSignature(self):
 		"""
@@ -274,12 +349,44 @@ class amplitudeAnalysis:
 #			totalPars[1] += delta
 #			print self.model.chi2(totalPars),":PP"
 #			totalPars[1] -= delta
-
-			res    = scipy.optimize.minimize(self.model.chi2, totalPars)
-			hi     = res.hess_inv
-			errs   = []
+			res       = scipy.optimize.minimize(self.model.chi2, totalPars)
+			hi        = res.hess_inv
+			errs      = []
+			startErrs = []
+			pars = res.x[:]
 			for i in range(len(res.x)):
-				errs.append(hi[i,i]**.5)
+				errs.append((2.*hi[i,i])**.5)
+			print "errs before",errs
+			errs = estimateErrors2(self.model.chi2, pars, errs)
+			for i in range(len(res.x)):
+				print "-/-/-/-/-/-/-/-/-/-",i,"-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-"
+
+				pars[i] += errs[i]
+				print self.model.chi2(pars) - res.fun
+				pars[i] -= 2*errs[i]
+				print self.model.chi2(pars) - res.fun
+				pars[i] += errs[i]
+			print "-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-"
+
+			
+			if res.x[0] < 1.05:
+				print "Compare with rho parameters"
+				print "sigM =", (abs(res.x[0]-0.7690)/errs[0])
+				print "sigG =", (abs(res.x[1]-0.1509)/errs[1])
+			else:
+				print "Compare with f2 parameters"
+				print "sigM =", (abs(res.x[0]-1.2751)/errs[0])
+				print "sigG =", (abs(res.x[1]-0.1851)/errs[1])
+
+
+			       
+
+#			estedErrs = estimateErrors(self.model.chi2, res.x, startErrs)
+#			print "---------------------------------------"
+#			print errs
+#			print estedErrs
+#			print "---------------------------------------"
+
 			if not self.model[0].setParametersAndErrors(res.x, errs):
 				raise RuntimeError("Could not set parameter errors")
 			print "The final Chi2 is:",res.fun
@@ -474,7 +581,7 @@ class amplitudeAnalysis:
 		hi     = res.hess_inv
 		errs   = []
 		for i in range(len(res.x)):
-			errs.append(hi[i,i]**.5)
+			errs.append((2*hi[i,i])**.5)
 		if -self.model.nPar() > 0:
 			if not self.model[0].setParametersAndErrors(res.x[-self.model.nPar():], errs[-self.model.nPar():]):
 				raise RuntimeError("Could not set parameter errors")
@@ -503,9 +610,9 @@ class amplitudeAnalysis:
 		"""
 		Evaluates the chi2 for a set of zero mode parameters (this is AMPL mode)
 		"""
-		self.model.chi2(self.fitParameters)
 		if not self.IS('hasFitResult'):
 			raise RuntimeError("No fit parameters, call 'fitShapeParameters(...)' first")
+		self.model.chi2(self.fitParameters)
 		if not len(params) == len(self.model):
 			print len(params) , len(self.model)
 			raise IndexError("Number of tBins does not match")
@@ -574,6 +681,47 @@ class amplitudeAnalysis:
 			raise RuntimeError("No mode set")
 		return retVal
 
+	def setExternalZMP(self, zmp):
+		if not len(zmp) == len(self.model):
+			raise ValueError("Dimension mismatch (tBin level)")
+		for i in range(len(zmp)):
+			if not len(zmp[i]) == len(self.model[i]):
+				raise ValueError("Dimension mismatch (mBin level)" + str(len(zmp[i])) + " " + str(len(self.model[i])))
+		self.externalZMP = zmp
+		self.SET("hasExternalZMP")
+
+	def callAmplChi2WithFixedZeroMode(self, params):
+		"""
+		return a chi2 with given zero-mode parameters
+		"""
+		if not self.IS("hasExternalZMP"):
+			raise Exception("Set the zero-mode parameters first")
+		c2 = 0.
+		if len(params) == 0:
+			raise Exception("Nothing to fit")
+		for t,tBin in enumerate(self.model):
+			for m,mBin in enumerate(tBin):
+				mBin.setShapeParameters(params)
+				zmp   = self.externalZMP[t][m]
+				a,b,c = mBin.getOwnTheoryABC()
+				zerD  = len(zmp)
+				newD  = len(b) - zerD
+				A     = np.zeros((newD, newD))
+				B     = np.zeros((newD))
+				C     = c
+				for i in range(newD):
+					B[i] += b[zerD+i]
+					for j in range(newD):
+						A[i,j] = a[zerD+i,zerD+j]
+				for i in range(zerD):
+					C += zmp[i] * b[i]
+					for j in range(zerD):
+						C += zmp[i]*a[i,j]*zmp[j]
+					for j in range(newD):
+						B[j] += (a[i,j+zerD] + a[j+zerD,i])*zmp[i]
+				cpl = -np.dot(la.pinv(A + np.transpose(A)), B)
+				c2  += C + np.dot(B, cpl) + np.dot(cpl, np.dot(A, cpl))
+		return c2
 
 	def evaluateZeroModeParametersForMode(self, parameters):
 		"""
@@ -635,10 +783,17 @@ class amplitudeAnalysis:
 			return ndf - nnon
 		raise RuntimeError("No mode set")
 
-	def produceResultViewer(self, nonShapeParameters, sector, tBin = 0, noRun = False, plotTheory = False):
+	def produceResultViewer(self, nonShapeParameters, sector, tBin = -1, noRun = False, plotTheory = False):
 		"""
 		Produces a result viewer for the given zero mode parameters
 		"""
+		if tBin == -1:
+			if len(self.tBins) == 1:
+				tBinString = self.tBins[0]
+				tBin = 0
+			else:
+				raise Exception("tBin not specified")
+
 		for tt in self.model:
 			tt.removeZeroModeFromComa()
 
@@ -758,8 +913,8 @@ class amplitudeAnalysis:
 		else:
 			rv = resultViewer([corrInte[nSect], dataInte[nSect], theoInte[nSect]], [corrReal[nSect], dataReal[nSect], theoReal[nSect]], [corrImag[nSect], dataImag[nSect], theoImag[nSect]], [corrPhas[nSect], dataPhas[nSect], theoPhas[nSect]], self.startBin, reImCorrel = dataCOMA[nSect], noRun = noRun)
 
-		rv.titleRight   = getProperWaveName(self.sectors[nSect])
-		rv.tString  = getProperDataSet(self.inFileName, tBin)
+		rv.titleRight = getProperWaveName(self.sectors[nSect])
+		rv.tString    = getProperDataSet(self.inFileName, tBinString)
 		return rv
 
 def main():

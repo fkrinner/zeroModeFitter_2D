@@ -11,7 +11,11 @@ import sys
 import pyRootPwa
 import numpy as np
 
+from rootfabi import root_open
+
+import LaTeX_strings
 import consistencyUtils as cu
+from studyFileNames import fileNameMap
 
 import modernplotting.mpplot
 import modernplotting.toolkit
@@ -20,16 +24,51 @@ import studyPlotter
 mPi      = 0.13957018
 mK       = 0.493677
 
-#mRho     =  .77549
-#Grho     =  .1491
+mRho     =  .77549
+Grho     =  .1491
 
-mRho = .7
-Grho = 0.1
+#mRho = .7
+#Grho = 0.1
+Pr0  = 0.1973
+
+mRhoPrime = 1.465
+GrhoPrime =  .400
 
 def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
 	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 0, False)
+	fitRho = amplitudeAnalysis(inFileName, sectors, {"1++0+[pi,pi]1--PiS":[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
+	fitRho.loadData()
+	fitRho.finishModelSetup()
+	fitRho.fitShapeParameters()
+	fitRho.calculateNonShapeParameters()
+	fitRho.mode = AMPL
+#	fitRho.removeGlobalPhaseFromComa()
+	return fitRho
+
+def doFitRhoPrime(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
+	rhoMass  = ptc.parameter( mRho, "rhoMass" )
+	rhoWidth = ptc.parameter( Grho , "rhoWidth")
+	rhoPrimeMass  = ptc.parameter( mRhoPrime, "rhoPrimeMass" )
+	rhoPrimeWidth = ptc.parameter( GrhoPrime, "rhoPrimeWidth")
+	rho      = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 0, False)
+	rhoPrime = ptc.relativisticBreitWigner([rhoPrimeMass,rhoPrimeWidth], mPi, mPi, mPi, 1, 0, False)
+	fitRho = amplitudeAnalysis(inFileName, sectors, {"1++0+[pi,pi]1--PiS":[rho, rhoPrime]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
+	fitRho.loadData()
+	fitRho.finishModelSetup()
+	fitRho.fitShapeParameters()
+	fitRho.calculateNonShapeParameters()
+	fitRho.mode = AMPL
+#	fitRho.removeGlobalPhaseFromComa()
+	return fitRho
+
+def doFitRhoPR(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
+	rhoMass  = ptc.parameter( mRho, "rhoMass" )
+	rhoWidth = ptc.parameter( Grho , "rhoWidth")
+	PrA1  = ptc.PRparameter( Pr0, "PrA1" )
+	PrRho = ptc.PRparameter( Pr0, "PrRho")
+	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth,PrA1,PrRho], mPi, mPi, mPi, 1, 0, True)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"1++0+[pi,pi]1--PiS":[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
 	fitRho.loadData()
 	fitRho.finishModelSetup()
@@ -65,7 +104,7 @@ def doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap 
 			model.append(param)
 		waveModel[sector] = model
 	fixedShapes = amplitudeAnalysis(inFileName, sectors, waveModel, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
-	fixedShapes.loadData()
+	fixedShapes.loadData(loadIntegrals = True)
 	fixedShapes.finishModelSetup()
 	fixedShapes.fitShapeParameters()
 	fixedShapes.calculateNonShapeParameters()
@@ -112,15 +151,22 @@ def main():
 	tBin = int(sys.argv[1])
 	if tBin < 0 or tBin > 3:
 		raise ValueError("Invalid t' bin: " + str(tBin))
+	if len(sys.argv) > 2:
+		study = sys.argv[2]
+		studyAdder = "_"+study
+	else:
+		study = "std11"
+		studyAdder = ""
+	print "Study: "+study
 
-#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
-	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
+	inFileName = fileNameMap[study]
 	sectors          = ["1++0+[pi,pi]0++PiP", "1++0+[pi,pi]1--PiS"]
 	tBins            = [tBin]
-#	startBin         = 19
-#	stopBin          = 50
-	startBin = 14
+	startBin = 13
 	stopBin  = 50
+#	startBin = 25
+#	stopBin  = 28
+
 
 	allMethods       = {}
 	methodStrings    = {}
@@ -134,6 +180,9 @@ def main():
 	                      "fitRho1G"        : r"$\text{fit}_\rho^{1\Gamma}$",
 	                      "fitRho2G"        : r"$\text{fit}_\rho^{2\Gamma}$",
 	                      "smooth"          : r"smooth"}
+
+	fitRhoPrime = doFitRhoPrime(inFileName, sectors, startBin, stopBin, tBins)
+	return
 
 	print "Starting with fixed shape f0"
 	fixedShapeF0 = doFixedShapes(inFileName, sectors[:1], startBin, stopBin, tBins)
@@ -159,6 +208,14 @@ def main():
 	fixedShapes = doFixedShapes(inFileName, sectors, startBin, stopBin, tBins)
 	allMethods["fixedShapes"] = fixedShapes
 	print "Finished with fixed shapes"
+
+#	totalHists = fixedShapes.getTotalHists(cloneZeros(fixedShapes.getZeroModeParametersForMode()))
+#	with root_open("./totals_noCorr_1pp.root", "UPDATE") as out:
+#		for t in totalHists:
+#			for m in t:
+#				m.Write()
+#	return
+
 
 #	print "Starting with phase"
 #	fitPiPiSshape = doF0phase(inFileName, sectors[:1], startBin, stopBin, tBins)
@@ -195,7 +252,7 @@ def main():
 		print m,sumUp(allMethods[m].evaluateZeroModeParametersForMode(params[m])).real/ndfs[m]
 	diffs = cu.getmBinResolvedDiffs(allMethods)
 	comps = cu.getCompositions(diffs)
-	with  modernplotting.toolkit.PdfWriter("compositions_1pp_data"+str(tBin)+".pdf") as pdfOutput:
+	with  modernplotting.toolkit.PdfWriter("compositions_1pp_data"+str(tBin)+studyAdder+".pdf") as pdfOutput:
 		plot = style.getPlot1D()
 		for m in comps:
 			line  = [0.]*len(comps[m][0])
@@ -226,7 +283,7 @@ def main():
 	hist = pyRootPwa.ROOT.TH2D("hist","hist", len(params)+2, 0, len(params)+2, len(params), 0, len(params))
 
 	cumulWeights = {}
-	resovedWeightedSum = [[]] # Assumes one t' bin
+	resolvedWeightedSum = [[]] # Assumes one t' bin
 	for i in range(stopBin - startBin):
 		dim = len(params[m][0][i])
 		prrs = [0.] * dim
@@ -239,7 +296,7 @@ def main():
 #				print dim,i,j,params[m][0]
 #				print prrs
 				prrs[j] += weight * params[m][0][i][j]
-		resovedWeightedSum[0].append(prrs)
+		resolvedWeightedSum[0].append(prrs)
 
 	evals = {}
 	for i,m in enumerate(studyList):
@@ -260,9 +317,9 @@ def main():
 #	return 
 	weightedSum = weightedParametersSum(evals, selfEvals, params)
 	for i,m in enumerate(studyList):
-		evl = sumUp(allMethods[m].evaluateZeroModeParametersForMode(weightedSum)).real
+		evl = sumUp(allMethods[m].evaluateZeroModeParametersForMode(cloneZeros(weightedSum))).real
 		diff = (evl - selfEvals[m])/selfEvals[m]
-		evl2 = sumUp(allMethods[m].evaluateZeroModeParametersForMode(resovedWeightedSum)).real
+		evl2 = sumUp(allMethods[m].evaluateZeroModeParametersForMode(resolvedWeightedSum)).real
 		diff2 = (evl2 - selfEvals[m])/selfEvals[m]
 
 		print m,diff,";:;:;;>>>??"
@@ -276,21 +333,25 @@ def main():
 		axolotl.append(shortlabels[study])
 #		axolotl.append(alphabet[i])
 
-	with modernplotting.toolkit.PdfWriter("studies_1pp_data"+str(tBin)+".pdf") as pdfOutput:
+	style.titleRight = r"$1^{++}0^+$"
+	style.titleLeft  = LaTeX_strings.tBins[tBin]
+
+
+	with modernplotting.toolkit.PdfWriter("studies_1pp_data"+str(tBin)+studyAdder+".pdf") as pdfOutput:
 		plot = style.getPlot2D()
 		plot.axes.get_xaxis().set_ticks([(i + 0.5) for i in range(len(studyList)+2)])
 		plot.axes.get_yaxis().set_ticks([(i + 0.5) for i in range(len(studyList))])
 		studyPlotter.makeValuePlot(plot, hist)
 		
 		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(r"$\Sigma$")
+		axolotl.append(r"$\vec 0$")
 		axolotl.append(r"$\Omega$")
 		plot.axes.set_xticklabels(axolotl, rotation = 90)
 		plot.setZlim((0.,1.))
 
 		pdfOutput.savefigAndClose()
 
-	with open("studies_1pp_data"+str(tBin)+".txt",'w') as out:
+	with open("studies_1pp_data"+str(tBin)+studyAdder+".txt",'w') as out:
 		for axl in axolotl:
 			out.write(axl + ' ')
 		out.write("\n")
@@ -298,6 +359,62 @@ def main():
 			for j in range(hist.GetNbinsY()):
 				out.write(str(hist.GetBinContent(i+1, j+1)) + ' ')
 			out.write('\n')
+
+	doRhoFits = False
+	if doRhoFits:
+		fitRhoPR = doFitRhoPR(inFileName, sectors, startBin, stopBin, tBins)
+		with open("rhoMassesAndWidths_1pp_"+str(tBin)+".dat",'w') as out:
+			for i in range(stopBin-startBin):
+				binIndex = i+startBin
+				out.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
+				startValueOffset = 0.01
+				exceptCount      = 0
+				while True:
+					try:
+#					if True:
+						x,err = fitRhoPR.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset,Pr0+startValueOffset,Pr0+startValueOffset], [0],[i], zeroModeParameters = resolvedWeightedSum)
+						break
+					except:
+						print "Fitter exception encountered"
+						startValueOffset += 0.001
+						exceptCount      += 1	
+						if exceptCount > 3:
+							print "Too many failed attempts in bin "+str(i)+": "+str(exceptCount)
+#							raise Exception
+							x, err = [0.,0.],[0.,0.]
+							break
+
+				out.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]) + ' ' + str(x[2]) + ' ' + str(err[2]) + ' ' + str(x[3]) + ' ' + str(err[3]))
+				out.write('\n')			
+		return
+	doRhoPrimeFits = True
+	if doRhoPrimeFits:
+		fitRhoPrime = doFitRhoPrime(inFileName, sectors, startBin, stopBin, tBins)
+		with open("rhoPrimeMassesAndWidths_1pp_"+str(tBin)+".dat",'w') as out:
+			for i in range(stopBin-startBin):
+				binIndex = i+startBin
+				out.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
+				startValueOffset = 0.01
+				exceptCount      = 0
+				while True:
+#					try:
+					if True:
+						x,err = fitRhoPrime.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset,mRhoPrime+startValueOffset,GrhoPrime+startValueOffset], [0],[i], zeroModeParameters = resolvedWeightedSum)
+						break
+#					except:
+#						print "Fitter exception encountered"
+#						startValueOffset += 0.001
+#						exceptCount      += 1	
+#						if exceptCount > 3:
+#							print "Too many failed attempts in bin "+str(i)+": "+str(exceptCount)
+##							raise Exception
+#							x, err = [0.,0.,0.,0.],[0.,0.,0.,0.]
+#							break
+				
+
+				out.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]) + ' ' + str(x[2]) + ' ' + str(err[2]) + ' ' + str(x[3]) + ' ' + str(err[3]))
+				out.write('\n')			
+		return
 
 
 ##### Writing starts here
@@ -312,22 +429,32 @@ def main():
 				rv.run()
 			rv = allMethods[stu].produceResultViewer(allMethods[stu].getZeroModeParametersForMode(),s, noRun = True)
 			for bin in range(startBin, stopBin):
-				fileName = "./collectedMethods/"+stu+"_"+sect+"_1ppData_"+str(bin)
+				fileName = "./collectedMethods/"+stu+"_"+sect+"_1ppData_"+str(bin)+studyAdder
 				if not (sect,bin) in fileNames:
 					fileNames[sect,bin] = []
 				fileNames[sect,bin].append(fileName)
 				rv.writeAmplFiles(bin, fileName = fileName)
 
+	totalHists = fixedShapes.getTotalHists(resolvedWeightedSum)
+	with root_open("./totals_1pp"+studyAdder+".root", "UPDATE") as out:
+		for t in totalHists:
+			for m in t:
+				m.Write()
+#	return
+
+	folder = "./comparisonResultsData"+studyAdder+"/"
+
 	for s, sect in enumerate(allMethods['fixedShapes'].sectors):
 		allMethods['fixedShapes'].removeZeroModeFromComa()
 		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
 		print "Achtung::: cloneZeros() is aktiv"
-		rv = allMethods['fixedShapes'].produceResultViewer(resovedWeightedSum,s, noRun = True, plotTheory = True)
-		rv.writeBinToPdf(startBin, stdCmd = ["./comparisonResultsData/" + sect + "_data_2D_"+str(tBin)+".pdf", "", [], "", []])
+		rv = allMethods['fixedShapes'].produceResultViewer(resolvedWeightedSum,s, noRun = True, plotTheory = True)
+		rv.writeBinToPdf(startBin, stdCmd = [folder + sect + "_data_2D_"+str(tBin)+".pdf", "", [], "", []])
+
 		for b in range(startBin, stopBin):
 			intensNames = [name+".intens" for name in fileNames[sect,b]]
 			argandNames = [name+".argand" for name in fileNames[sect,b]]
-			rv.writeBinToPdf(b, stdCmd = ["", "./comparisonResultsData/" + sect + "_data_intens_"+str(b)+"_"+str(tBin)+".pdf", intensNames,  "./comparisonResultsData/" + sect + "_data_argand_"+str(b)+"_"+str(tBin)+".pdf", argandNames])
+			rv.writeBinToPdf(b, stdCmd = ["", folder + sect + "_data_intens_"+str(b)+"_"+str(tBin)+".pdf", intensNames,  folder + sect + "_data_argand_"+str(b)+"_"+str(tBin)+".pdf", argandNames])
 	print studyList
 	print cumulWeights
 

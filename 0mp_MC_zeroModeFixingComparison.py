@@ -26,7 +26,15 @@ Grho     =  .1491
 def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
-	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
+	binning  = [0.278, 0.32, 0.36, 0.4 , 0.44, 0.48, 0.52, 0.56, 0.6 , 0.64, 0.68, 0.7 , 0.72,
+	            0.74 , 0.76, 0.78, 0.8 , 0.82, 0.84, 0.86, 0.88, 0.9 , 0.92, 0.96, 1.0 , 1.04, 
+	            1.08 , 1.12, 1.16, 1.2 , 1.24, 1.28, 1.32, 1.36, 1.4 , 1.44, 1.48, 1.52, 1.56, 
+	            1.6  , 1.64, 1.68, 1.72, 1.76, 1.8 , 1.84, 1.88, 1.92, 1.96, 2.0 , 2.04, 2.08, 
+	            2.12 , 2.16, 2.2 , 2.24, 2.28]
+
+
+#	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
+	rho = ptc.integratedRelativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, binning, intensWeight = True, fitPr = False, reweightInverseBW = True)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"0-+0+[pi,pi]1--PiP":[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
 	fitRho.loadData()
 	fitRho.finishModelSetup()
@@ -106,6 +114,10 @@ def main():
 #	style.p2dColorMap = 'YlOrRd'
 	style.p2dColorMap = 'Reds'
 
+	style.titleRight = r"$0^{-+}0^+$"
+	style.titleLeft  = r"Monte-Carlo"
+
+
 	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
 	sectors          = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
@@ -131,7 +143,7 @@ def main():
 	allMethods["fixedShapeF0"] = fixedShapeF0
 	print "Finished with fixed shape f0"
 
-#	print "Starting with fixed shape rho"
+	#	print "Starting with fixed shape rho"
 #	fixedShapeRho = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins)
 #	allMethods["fixedShapeRho"] = fixedShapeRho
 #	print "Finished with fixed shape rho"
@@ -159,7 +171,13 @@ def main():
 	print "Starting with fitting rho"
 	fitRho = doFitRho(inFileName, sectors, startBin, stopBin, tBins)
 	allMethods["fitRho"] = fitRho
+
+	fitRho.setZeroModeParameters(fixedShapes.getZeroModeParametersForMode())
+	for i in range(10):
+		x,err  = fitRho.fitShapeParametersForBinRange([mRho,Grho], [0], [i,i+1])
+		print x,err
 	print "Finished with fitting rho"
+	return
 
 #	print "Starting with fitting restricted rho (1 Gamma)"
 #	fitRho1G = doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]1--PiP":(mRho - Grho, mRho+Grho)})
@@ -176,6 +194,8 @@ def main():
 		smooth = doSmooth(inFileName, sectors, startBin, stopBin, tBins)
 		allMethods["smooth"] = smooth
 		print "Finished with smooth"
+
+	return
 
 	ndfs   = {}
 	params = {}
@@ -250,7 +270,7 @@ def main():
 #	return 
 	weightedSum = weightedParametersSum(evals, selfEvals, params)
 	for i,m in enumerate(studyList):
-		evl = sumUp(allMethods[m].evaluateZeroModeParametersForMode(weightedSum)).real
+		evl = sumUp(allMethods[m].evaluateZeroModeParametersForMode(cloneZeros(weightedSum))).real
 		diff = (evl - selfEvals[m])/selfEvals[m]
 		evl2 = sumUp(allMethods[m].evaluateZeroModeParametersForMode(resovedWeightedSum)).real
 		diff2 = (evl2 - selfEvals[m])/selfEvals[m]
@@ -266,6 +286,9 @@ def main():
 		axolotl.append(shortlabels[study])
 #		axolotl.append(alphabet[i])
 
+	style.titleRight = r"$0^{-+}0^+$"
+	style.titleLeft  = r"Monte Carlo"
+
 	with modernplotting.toolkit.PdfWriter("studies_0mp.pdf") as pdfOutput:
 		plot = style.getPlot2D()
 		plot.axes.get_xaxis().set_ticks([(i + 0.5) for i in range(len(studyList)+2)])
@@ -273,7 +296,7 @@ def main():
 		studyPlotter.makeValuePlot(plot, hist)
 		
 		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(r"$\Sigma$")
+		axolotl.append(r"$\vec 0$")
 		axolotl.append(r"$\Omega$")
 		plot.axes.set_xticklabels(axolotl, rotation = 90)
 		plot.setZlim((0.,1.))

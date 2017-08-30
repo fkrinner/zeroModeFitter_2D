@@ -5,7 +5,7 @@ from modes import INTENS, PHASE
 
 
 class allBins:
-	def __init__(self, binStart, binStop, realHists, imagHists, normHists, indexHists, comaHistList):
+	def __init__(self, binStart, binStop, realHists, imagHists, normHists, indexHists, comaHistList, intHistsReal = [], intHistsImag = []):
 		"""
 		Initializes the allBins class
 		"""
@@ -16,9 +16,15 @@ class allBins:
 		self.massBins = []
 		count = 0
 		for i in range(binStart, binStop):
-			self.massBins.append(massBin(i, realHists, imagHists, normHists, indexHists, comaHistList[count]))
+			if intHistsReal == [] and intHistsImag == []:
+				self.massBins.append(massBin(i, realHists, imagHists, normHists, indexHists, comaHistList[count]))
+			else:
+				if not len(intHistsReal) == len(comaHistList) or not len(intHistsImag) == len(comaHistList):
+					raise IndexError("Number of integral histograms does not match")
+				self.massBins.append(massBin(i, realHists, imagHists, normHists, indexHists, comaHistList[count], intHistsReal[count],intHistsImag[count]))
 			count += 1
-		self.chi2init = False
+		self.chi2init       = False
+		self.binsToEvaluate = []
 
 	def initChi2(self, sectorFuncMap):
 		"""
@@ -118,6 +124,32 @@ class allBins:
 		else:
 			return chi2
 
+	def fixedZMPchi2(self, pars):
+		"""
+		Returns a chi2 for the shape parameters and self.zeroModeParameters. The couplings are calculated. Sums over all bins in self.binsToEvaluate
+		"""
+		if len(self.binsToEvaluate) == 0:
+			raise RuntimeError("No bins to evaluate set")
+		chi2 = 0.
+		for i in self.binsToEvaluate:
+			chi2 += self.massBins[i].fixedZMPchi2(pars)
+		return chi2
+
+	def setBinsToEvalueate(self, mBinsToEvaluate):
+		self.binsToEvaluate = mBinsToEvaluate
+
+	def getNonShapeUncertainties(self, shapeParams = []):
+		"""
+		Gets the unceratinties on non-shape parameters at the minimum of chi2(...)
+		"""
+		if not self.chi2init:
+			raise RuntimeError("Chi2 not initialized, cannot evaluate")
+		uncert = []
+		for mb in self.massBins:
+			unc = mb.getNonShapeUncertainties(shapeParams)
+			uncert.append(unc)
+		return uncert
+
 	def compareTwoZeroModeCorrections(self, params1, params2):
 		"""
 		Compares two different corrections of the zero-modes
@@ -212,6 +244,7 @@ class allBins:
 						shapePars = pf[2][i]
 						spfm[s].append([p,f,shapePars])
 			mb.setTheory(spfm)
+
 
 	def setTheoryFromOwnFunctions(self, parameterLists, skipZeroPars = True, restrictToRange = True):
 		"""
@@ -347,6 +380,12 @@ class allBins:
 		for mb in self.massBins:
 			mb.rotateToPhaseOfBin(nBin)
 
+	def removePhases(self, ampls):
+		if not len(ampls) == len(self.massBins):
+			raise IndexError("Dimension mismatch")
+		for i,mb in enumerate(self.massBins):
+			mb.removePhase(ampls[i])
+
 	def fillHistograms(self, params, hists, mode = INTENS):
 		"""
 		Fills 2D histograms
@@ -356,4 +395,41 @@ class allBins:
 			nz = 2*mb.nZero
 			mb.fillHistograms(params[parCount:parCount+nz], hists, mode = mode)
 			parCount += nz
+
+	def fillTotal(self, params, hists, binRange = {}):
+		parCount = 0
+		for mb in self.massBins:
+			nz = 2*mb.nZero
+			mb.fillTotal(params[parCount:parCount+nz], hists, binRange = binRange)
+			parCount += nz
+
+	def setZeroModeParameters(self, zmp):
+		"""
+		Sets the zero mode parameters
+		"""
+		if len(zmp) == 0:
+			if not self.nZero() == 0:
+				raise IndexError("No zero mode parameters given")
+			else:
+				for mBin in self.massBins:
+					mBin.setZeroModeParameters([])
+				return
+		if hasattr(zmp[0], "__len__"):
+			if not len(zmp) == len(self.massBins):
+				raise IndexError("Mismatch in number of mass bins")
+			for i,pp in enumerate(zmp):
+				self.massBins[i].setZeroModeParameters(pp)
+			return
+		else:
+			if not len(zmp) == 2*self.nZero():
+				raise IndexError("Number of parameters mismatch")
+			count = 0
+			for mb in self.massBins:
+				zm = 2*mb.nZero
+				mb.setZeroModeParameters(zmp[count:count+zm])
+				count += zm
+			return
+		raise Exception("Something went seriously wrong")
+
+	
 	

@@ -17,7 +17,6 @@ import modernplotting.specialPlots
 
 import LaTeX_strings
 
-
 def findMinBin(hist):
 	for i in range(0,hist.GetNbinsX()):
 		if not hist.GetBinContent(i+1,1) == 0.:
@@ -75,6 +74,21 @@ def setAxesRange(graph):
 		ranges = ((xMin - delRange, xMax + delRange), (yMin, yMax))
 	return ranges
 
+def mergeRanges(ranges1, ranges2):
+	xMin   = min(ranges1[0][0], ranges2[0][0])
+	xMax   = max(ranges1[0][1], ranges2[0][1])
+	xRange = xMax - xMin
+	yMin   = min(ranges1[1][0], ranges2[1][0])
+	yMax   = max(ranges1[1][1], ranges2[1][1])
+	yRange = yMax - yMin
+	if xRange >= yRange:
+		delRange = (xRange - yRange)/2
+		ranges = ((xMin, xMax),(yMin - delRange, yMax + delRange))
+	else:
+		delRange = (yRange - xRange)/2
+		ranges = ((xMin - delRange, xMax + delRange), (yMin, yMax))
+	return ranges
+
 def getStdCmd():
 	print "00 : 0mp0pp"
 	print "01 : 0mp1mm"
@@ -92,9 +106,15 @@ def getStdCmd():
 	if mode == '00':
 		return ["", "./results/0mp0ppIntens.pdf", ["./results/0mp0pp_only0pp.intens", "./results/0mp0pp_only1mm.intens"],
 		            "./results/0mp0ppArgand.pdf", ["./results/0mp0pp_only0pp.argand", "./results/0mp0pp_only1mm.argand"]]
+	if mode == '00-':
+		return ["", "./results/0mp0ppIntens.pdf", ["./results/0mp0pp_only0pp.intens"],
+		            "./results/0mp0ppArgand.pdf", ["./results/0mp0pp_only0pp.argand"]]
 	if mode == '01':
 		return ["", "./results/0mp1mmIntens.pdf", ["./results/0mp1mm_only0pp.intens", "./results/0mp1mm_only1mm.intens"],
 		            "./results/0mp1mmArgand.pdf", ["./results/0mp1mm_only0pp.argand", "./results/0mp1mm_only1mm.argand"]]
+	if mode == '01-':
+		return ["", "./results/0mp1mmIntens.pdf", ["./results/0mp1mm_only0pp.intens"],
+		            "./results/0mp1mmArgand.pdf", ["./results/0mp1mm_only0pp.argand"]]
 	if mode == '10':
 		return ["", "./results/1pp0ppIntens.pdf", ["./results/1pp0pp_only0pp.intens", "./results/1pp0pp_only1mm.intens"],
 		            "./results/1pp0ppArgand.pdf", ["./results/1pp0pp_only0pp.argand", "./results/1pp0pp_only1mm.argand"]]
@@ -126,6 +146,12 @@ def getStdCmd():
 				argands.append(ffn)
 		return ["", "intens_"+folder+suffix+".pdf", intenses, "argands_"+folder+suffix+".pdf", argands]
 
+def scaleHist(hist, factor):
+	for x in range(hist.GetNbinsX()):
+		for y in range(hist.GetNbinsY()):
+			hist.SetBinContent(x+1,y+1,hist.GetBinContent(x+1,y+1)*factor)
+			hist.SetBinError(x+1,y+1,hist.GetBinError(x+1,y+1)*factor)
+
 class resultViewer:
 	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 34, startCommand = "", reImCorrel = None, noRun = False):
 		self.nHists       = len(intensHists)
@@ -143,10 +169,12 @@ class resultViewer:
 		if not len(self.realHists) ==self. nHists or not len(self.imagHists) == self.nHists or not len(self.phaseHists) == self.nHists:
 			raise ValueError("Size of histograms does not match")
 
-		self.corrColor = modernplotting.colors.colorScheme.green
+		self.corrColor = modernplotting.colors.colorScheme.blue
 		self.theoColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.gray, .2)
 		self.dataColor = modernplotting.colors.colorScheme.red
-		self.addiColor = modernplotting.colors.colorScheme.gray
+#		self.addiColor = modernplotting.colors.colorScheme.gray
+#		self.addiColor = modernplotting.colors.colorScheme.blue
+		self.addiColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, .5)
 
 		self.lineArgs = {'marker': None, 'linestyle':'dashed', 'markersize':0, 'linewidth':.4, 'zorder' :0, 'color':'.5'}
 
@@ -160,10 +188,11 @@ class resultViewer:
 
 		self.noRun = noRun
 
-		self.titleRight = ""
-		self.tString  = ""
+		self.titleRight         = ""
+		self.tString            = ""
+		self.overrideMassString = ""
 
-		self.tStringXpos = 0.015
+		self.tStringXpos = 0.017
 		self.tStringYpos = 0.93
 
 		if not startCommand == "":
@@ -184,6 +213,19 @@ class resultViewer:
 			self.argandCanvas.SetWindowSize(500,500)
 			self.phaseCanvas.SetWindowSize( 500,500)
 
+		self.scale(1000./40.) # Scales to events/GeV
+		self.printLiminary   = True
+		self.scaleTo         = "corr"
+		self.topMarginIntens = 1.2
+
+	def scale(self, factor):
+		for hist in self.intensHists:
+			scaleHist(hist, factor)
+		for hist in self.realHists:
+			scaleHist(hist, factor**.5)
+		for hist in self.imagHists:
+			scaleHist(hist, factor**.5)
+		scaleHist(self.reImCorrel, factor)
 
 	def getArgand(self, nBin, index = 0):
 		if index >= self.nHists:
@@ -354,6 +396,10 @@ class resultViewer:
 #		print "Written."
 
 	def getLaTeXMassString(self, nBin):
+		if not self.overrideMassString == "":
+			return self.overrideMassString
+#		print "r3m0ve 7hi5 h4ck......"
+#		return ""
 		mMin = self.intensHists[0].GetXaxis().GetBinLowEdge(nBin+1)
 		mMax = self.intensHists[0].GetXaxis().GetBinUpEdge(nBin+1)
 		retVal = LaTeX_strings.getMassString(mMin, mMax)
@@ -361,6 +407,9 @@ class resultViewer:
 
 	def writeBinToPdf(self, nBin, stdCmd = None):
 		style = modernplotting.mpplot.PlotterStyle()
+		style.errorEllipsesEdgeColor = modernplotting.colors.makeColorLighter(self.corrColor, .5)
+		style.errorEllipsesFaceColor = modernplotting.colors.makeColorLighter(self.corrColor, .5)
+		style.finishPreliminary      = self.printLiminary
 		if not self.titleRight == "":
 			style.titleRight = self.titleRight
 
@@ -379,11 +428,16 @@ class resultViewer:
 			with modernplotting.toolkit.PdfWriter(twoDimPlotName) as pdfOutput:
 				plot = style.getPlot2D()
 				modernplotting.root.plotTH2D(self.intensHists[0], plot, maskValue = 0.)
+				plot.setZshowColorBar()
+				plot.colorbar.ax.yaxis.offsetText.set_position((4.,1.))
+				plot.colorbar.formatter.set_powerlimits((2, 6))
 				plot.setZlim((0., self.intensHists[0].GetMaximum()))
 				plot.setXlabel(LaTeX_strings.m3Pi)
 				plot.setYlabel(LaTeX_strings.m2Pi)
 				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
-				pdfOutput.savefigAndClose()
+
+				plot.finishAndSaveAndClose(pdfOutput)
+				
 		if stdCmd:
 			slicePlotName = stdCmd[1]
 			addFiles      = stdCmd[2]
@@ -411,6 +465,15 @@ class resultViewer:
 			with modernplotting.toolkit.PdfWriter(slicePlotName) as pdfOutput:
 				plot = style.getPlot1D()
 				hists = [self.getSlice(nBin, index) for index in range(self.nHists)]
+				
+				nnBins = hists[0].GetNbinsX()
+				firstUpperBinBorder = -1.
+				for i in range(nnBins):
+					if not hists[0].GetBinContent(nnBins-i) == 0.:
+						firstUpperBinBorder = hists[0].GetXaxis().GetBinUpEdge(nnBins-i)
+						break
+				if firstUpperBinBorder == -1.:
+					raise ValueError("Could not determine upper limit")
 				for fn in addFiles:
 					hist = parseTH1D(fn)
 					modernplotting.root.plotTH1D(hist, plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':0, 'color':self.addiColor})
@@ -420,14 +483,21 @@ class resultViewer:
 					modernplotting.root.plotTH1D(hists[2], plot, markerDefinitions = { 'zorder':2, 'color': self.theoColor})
 				if self.plotCorr:
 					modernplotting.root.plotTH1D(hists[0], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':3, 'color':self.corrColor})
-				plot.setXlabel(LaTeX_strings.m3Pi)
-				plot.setXlim(self.mMin,self.mMax)
+				plot.setXlabel(LaTeX_strings.m2Pi)
+#				plot.setXlim(self.mMin,self.mMax)
+				plot.setXlim(self.mMin,firstUpperBinBorder)
 				plot.setYlabel(LaTeX_strings.intens)
 				plot.axes.yaxis.offsetText.set_position((-.15,1.))
-				plot.setYlim(0.,hists[0].GetMaximum()*1.2)
+				if self.scaleTo == "corr":
+					plot.setYlim(0.,hists[0].GetMaximum()*self.topMarginIntens)
+				elif self.scaleTo == "maxCorrData":
+					plot.setYlim(0.,max(hists[0].GetMaximum(),hists[1].GetMaximum())*self.topMarginIntens)
+				else:
+					raise RuntimeError("Unknwons scale option '" + self.scaleTo + "'")
+				
 				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
 
-				pdfOutput.savefigAndClose()
+				plot.finishAndSaveAndClose(pdfOutput)
 		if stdCmd:
 			argandPlotName = stdCmd[3]
 			addFiles       = stdCmd[4]
@@ -467,15 +537,8 @@ class resultViewer:
 					if len(argands) > 2 and self.plotTheo:
 						modernplotting.root.plotTH1D(argands[2], plot, maskValue = 0.,markerDefinitions = {'marker' : None, 'linestyle' : 'solid', 'zorder' : 1, 'color': self.theoColor, 'linewidth' : 1.})
 					if self.plotCorr:
-						modernplotting.root.plotTH1D(argands[0], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'marke': None, 'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 3, 'color' : self.corrColor})
+						modernplotting.root.plotTH1D(argands[0], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'marke': None, 'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 3, 'color':self.corrColor})
 					ranges = setAxesRange(argands[0])
-	#				ranges = getMaximumRanges(argands + addGraphs)
-	#				ranges = ((-500., 500.), (-500., 500.))
-					plot.setXlabel(LaTeX_strings.real)
-					plot.setYlabel(LaTeX_strings.imag)
-					plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
-					plot.setXlim(ranges[0])
-					plot.setYlim(ranges[1])
 				else:
 					ranges = setAxesRange(self.getArgand(nBin, 0))
 					for fn in addFiles:
@@ -491,15 +554,27 @@ class resultViewer:
 						X,Y,COMA = self.getArgandData(nBin, 0, getCOMA = True)
 						modernplotting.specialPlots.plotErrorEllipses(plot, X, Y, COMA, markerDefinitions = {'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 1, 'color' : self.corrColor, 'markersize' : 0.})
 						plot.plot(X,Y, **{'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 4, 'color' : self.corrColor})
-					plot.setXlabel(LaTeX_strings.real)
-					plot.setYlabel(LaTeX_strings.imag)
-					plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
-					plot.setXlim(ranges[0])
-					plot.setYlim(ranges[1])
+				if self.scaleTo == "corr":
+					pass
+				elif self.scaleTo == "maxCorrData":
+					ranges    = mergeRanges(ranges, setAxesRange(self.getArgand(nBin, 1)))
+				else:
+					raise RuntimeError("Unknwons scale option '" + self.scaleTo + "'")
+
+
+				plot.setXlabel(LaTeX_strings.real)
+				plot.setYlabel(LaTeX_strings.imag)
+				plot.axes.yaxis.offsetText.set_position((-.15,1.))
+				plot.axes.xaxis.offsetText.set_position((1.05,0.))
+				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
+				fakk = .1
+				yRange = (ranges[1][0], ranges[1][1] +  fakk*(ranges[1][1] - ranges[1][0]))
+				plot.setXlim(ranges[0])
+				plot.setYlim(yRange)
 
 				plot.plot([ranges[0][0],ranges[0][1]],[0.,0.], **self.lineArgs)
-				plot.plot([0.,0.],[ranges[1][0],ranges[1][1]], **self.lineArgs)
+				plot.plot([0.,0.],[yRange[0],yRange[1]], **self.lineArgs)
 
-				pdfOutput.savefigAndClose()
+				plot.finishAndSaveAndClose(pdfOutput)
 		print "Writing to .pdf finished."
 
