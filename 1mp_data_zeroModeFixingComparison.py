@@ -29,12 +29,12 @@ Grho     =  .1491
 mF2 = 1.2751
 GF2 = 0.1851
 
-def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, phaseFile = ""):
+def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
 	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"1-+1+[pi,pi]1--PiP":[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
-	fitRho.loadData(phaseFile = phaseFile)
+	fitRho.loadData(referenceWave = referenceWave)
 	fitRho.finishModelSetup()
 	fitRho.fitShapeParameters()
 	fitRho.calculateNonShapeParameters()
@@ -44,7 +44,7 @@ def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {},
 
 alphabet = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
 
-def doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, phaseFile = ""):
+def doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
 	waveModel = {}
 	for n,sector in enumerate(sectors):
 		model = []
@@ -55,7 +55,7 @@ def doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap 
 			model.append(param)
 		waveModel[sector] = model
 	fixedShapes = amplitudeAnalysis(inFileName, sectors, waveModel, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
-	fixedShapes.loadData(loadIntegrals = True,phaseFile = phaseFile)
+	fixedShapes.loadData(loadIntegrals = True, referenceWave = referenceWave)
 	fixedShapes.finishModelSetup()
 	fixedShapes.fitShapeParameters()
 	fixedShapes.calculateNonShapeParameters()
@@ -63,10 +63,10 @@ def doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap 
 #	fixedShapes.removeGlobalPhaseFromComa()
 	return fixedShapes
 
-def doSmooth(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, phaseFile = ""):
+def doSmooth(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
 	waveModel = {}
 	smooth = amplitudeAnalysis(inFileName, sectors, waveModel, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
-	smooth.loadData(phaseFile = phaseFile)
+	smooth.loadData(referenceWave = referenceWave)
 	smooth.finishModelSetup()
 	smooth.mode = SMOOTH
 #	smooth.removeGlobalPhaseFromComa()
@@ -100,7 +100,7 @@ def main():
 	style.p2dColorMap = 'Reds'
 
 	inFileName    = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_exotic.root"
-	phaseFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/ampls_exoticStudy_4++1+rhoPiG.dat"
+	referenceWave = "4-+0+rhoPiF"
 	sectors          = ["1-+1+[pi,pi]1--PiP"]
 	tBin = int(sys.argv[1])
 	if tBin < 0 or tBin > 3:
@@ -138,22 +138,20 @@ def main():
 	                      "smooth"            : r"smooth"}
 
 	print "Starting with fixed shapes"
-	fixedShapes = doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, phaseFile = phaseFileName)
+	fixedShapes = doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
 	allMethods["fixedShapes"] = fixedShapes
 	print "Finished with fixed shapes"
 	fullSig = fixedShapes.getZeroModeSignature()
 
 
 	print "Starting with fitting rho"
-	fitRho = doFitRho(inFileName, sectors, startBin, stopBin, tBins, phaseFile = phaseFileName)
+	fitRho = doFitRho(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
 	allMethods["fitRho"] = fitRho
 	print "Finished with fitting rho"
 
-	return
-
 #	if stopBin - startBin > 1:
 #		print "Starting with smooth"
-#		smooth = doSmooth(inFileName, sectors, startBin, stopBin, tBins, phaseFile = phaseFileName)
+#		smooth = doSmooth(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
 #		allMethods["smooth"] = smooth
 #		print "Finished with smooth"
 
@@ -201,25 +199,23 @@ def main():
 	style.titleRight = r"$1^{-+}1^+$"
 	style.titleLeft  = LaTeX_strings.tBins[tBin]
 
-	with  modernplotting.toolkit.PdfWriter("compositions_1mp_"+str(tBin)+".pdf") as pdfOutput:
-		plot = style.getPlot1D()
-		for m in studyList:
-			line  = [0.]*len(comps[m][0])
-			xAxis = [ .5 + 0.04*(startBin + i) for i in range(len(comps[m][0]))]
-			break
-		count = 0
-		for m in studyList:
-			newLine = line[:]
-			for i in range(len(comps[m][0])):
-				newLine[i] += comps[m][0][i]
-			plot.axes.fill_between(xAxis, line, newLine, facecolor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, 0.1*count))
-			count += 1
-			line = newLine
-		plot.setYlim(0.,1.)
-		plot.setXlim(xAxis[0], xAxis[-1])
-		plot.finishAndSaveAndClose(pdfOutput)
-
-
+#	with  modernplotting.toolkit.PdfWriter("compositions_1mp_"+str(tBin)+".pdf") as pdfOutput:
+#		plot = style.getPlot1D()
+#		for m in studyList:
+#			line  = [0.]*len(comps[m][0])
+#			xAxis = [ .5 + 0.04*(startBin + i) for i in range(len(comps[m][0]))]
+#			break
+#		count = 0
+#		for m in studyList:
+#			newLine = line[:]
+#			for i in range(len(comps[m][0])):
+#				newLine[i] += comps[m][0][i]
+#			plot.axes.fill_between(xAxis, line, newLine, facecolor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, 0.1*count))
+#			count += 1
+#			line = newLine
+#		plot.setYlim(0.,1.)
+#		plot.setXlim(xAxis[0], xAxis[-1])
+#		plot.finishAndSaveAndClose(pdfOutput)
 
 	hist = pyRootPwa.ROOT.TH2D("hist","hist", len(studyList)+2, 0, len(studyList)+2, len(studyList), 0, len(studyList))
 
@@ -305,16 +301,23 @@ def main():
 				fileNames[sect,bin].append(fileName)
 				rv.writeAmplFiles(bin, fileName = fileName)
 
-	folder = "./comparisonResultsData_1mp/"
+	folder = "./comparisonResultsData_1mp_scale/"
 
 	for s, sect in enumerate(allMethods['fixedShapes'].sectors):
 		allMethods['fixedShapes'].removeZeroModeFromComa()
-		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
+#		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
 		rv = allMethods['fixedShapes'].produceResultViewer(resolvedWA,s, noRun = True, plotTheory = True)
+#		rv.plotData = False
+		rv.scaleTo = "maxCorrData"
 		rv.writeBinToPdf(startBin, stdCmd = [ folder + sect + "_data_2D_"+str(tBin)+".pdf", "", [], "", []])
 		for b in range(startBin, stopBin):
 			intensNames = [name+".intens" for name in fileNames[sect,b]]
 			argandNames = [name+".argand" for name in fileNames[sect,b]]
+#			intensNames = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/evalDima/dima.intens"]
+#			argandNames = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/evalDima/dima.argand"]
+#			intensNames = []
+#			argandNames = []
+
 			rv.writeBinToPdf(b, stdCmd = ["", folder + sect + "_data_intens_"+str(b)+"_"+str(tBin)+".pdf", intensNames,  folder + sect + "_data_argand_"+str(b)+"_"+str(tBin)+".pdf", argandNames])
 	print studyList
 

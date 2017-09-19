@@ -234,23 +234,23 @@ def main():
 	style.titleRight = r"$3^{++}0^+$"
 	style.titleLeft  = LaTeX_strings.tBins[tBin]
 
-	with  modernplotting.toolkit.PdfWriter("compositions_bigger3pp_"+str(tBin)+".pdf") as pdfOutput:
-		plot = style.getPlot1D()
-		for m in studyList:
-			line  = [0.]*len(comps[m][0])
-			xAxis = [ .5 + 0.04*(startBin + i) for i in range(len(comps[m][0]))]
-			break
-		count = 0
-		for m in studyList:
-			newLine = line[:]
-			for i in range(len(comps[m][0])):
-				newLine[i] += comps[m][0][i]
-			plot.axes.fill_between(xAxis, line, newLine, facecolor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, 0.1*count))
-			count += 1
-			line = newLine
-		plot.setYlim(0.,1.)
-		plot.setXlim(xAxis[0], xAxis[-1])
-		pdfOutput.savefigAndClose()
+#	with  modernplotting.toolkit.PdfWriter("compositions_bigger3pp_"+str(tBin)+".pdf") as pdfOutput:
+#		plot = style.getPlot1D()
+#		for m in studyList:
+#			line  = [0.]*len(comps[m][0])
+#			xAxis = [ .5 + 0.04*(startBin + i) for i in range(len(comps[m][0]))]
+#			break
+#		count = 0
+#		for m in studyList:
+#			newLine = line[:]
+#			for i in range(len(comps[m][0])):
+#				newLine[i] += comps[m][0][i]
+#			plot.axes.fill_between(xAxis, line, newLine, facecolor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, 0.1*count))
+#			count += 1
+#			line = newLine
+#		plot.setYlim(0.,1.)
+#		plot.setXlim(xAxis[0], xAxis[-1])
+#		pdfOutput.savefigAndClose()
 
 
 

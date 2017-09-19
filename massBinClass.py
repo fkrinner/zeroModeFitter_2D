@@ -191,7 +191,8 @@ class massBin:
 		if len(pars) > 0:
 			self.setShapeParameters(pars)
 		A,B,C = self.getOwnTheoryABC()
-		zmPars  = -np.dot(B, utils.pinv(A + np.transpose(A)))
+		zmPars  = -np.dot(B, la.pinv(A + np.transpose(A)))
+#		zmPars  = -np.dot(B, utils.pinv(A + np.transpose(A)))
 		chi2  = np.dot(zmPars,np.dot(A,zmPars)) + np.dot(zmPars,B) + C
 
 		if returnParameters:
@@ -533,7 +534,7 @@ class massBin:
 		"""
 		Removes the dorection of the zero-mode from the covariance matrix
 		"""
-#		print 'Remove zm'
+		print 'Remove zm'
 		if len(self.zeroModes) == 0:
 			return
 		dim = len(self.coma)
@@ -586,6 +587,8 @@ class massBin:
 		"""
 		Removes the direction of a global phase rotation from the covariance matrix
 		"""
+		print "Phase removed <---!"
+
 		phaseDirection = self.getGlobalPhaseDirection()
 		dim = 2*self.totalBins
 		transformationMatrix = np.identity(dim)

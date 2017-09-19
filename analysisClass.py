@@ -12,8 +12,11 @@ from tBinHolder import tBinHolder
 from random import random
 from LaTeX_strings import getProperWaveName, getProperDataSet
 from resultViewerClass import resultViewer
-from utils import loadAmplsTM
-from estimateErrors import estimateErrors,estimateErrors2
+from utils import loadAmplsTM, changeReferenceWave
+from estimateErrors import estimateErrors,estimateErrors2,estimateErrors3
+
+
+			
 
 class amplitudeAnalysis:
 	"""
@@ -75,12 +78,13 @@ class amplitudeAnalysis:
 	def setZeroModeParameters(self,params):
 		self.model.setZeroModeParameters(params)
 
-	def loadData(self, loadIntegrals = False, phaseFile = ""):
+	def loadData(self, loadIntegrals = False, phaseFile = "", referenceWave = ""):
 		"""
 		Loads the rquired data from a ROOT file
 		"""
 		if not phaseFile == "":
-			phaseAmplitudes = loadAmplsTM(phaseFile)
+			raise RuntimeError("The method with the phase file is outdated... use the referenceWave argument")
+#			phaseAmplitudes = loadAmplsTM(phaseFile)
 
 		for tBin in self.tBins:
 			with root_open(self.inFileName, "READ") as inFile:
@@ -113,8 +117,8 @@ class amplitudeAnalysis:
 					if not histIndx:
 						raise IOError("Could not get '" + indexHistName + "' from '" + self.inFileName + "'")
 					histListIndx.append(histIndx)
-				histsToFill = []
-				comaHists = []
+				histsToFill  = []
+				comaHists    = []
 				intHistsReal = []
 				intHistsImag = []
 				for mBin in range(self.startBin, self.stopBin):
@@ -134,13 +138,24 @@ class amplitudeAnalysis:
 						if not imagHist:
 							raise IOError("Could not get '" + imagHistName + "' from '" + self.inFileName + "'")
 						intHistsImag.append(imagHist)
+				if not referenceWave == "":
+					refHistReal  = inFile.Get(referenceWave+"_"+str(tBin)+"_real")
+					if not refHistReal:
+						raise IOError("Could not get '" + referenceWave+"_"+str(tBin)+"_real" + "' from '" + self.inFileName + "'")
+					refHistImag  = inFile.Get(referenceWave+"_"+str(tBin)+"_imag")
+					if not refHistImag:
+						raise IOError("Could not get '" + referenceWave+"_"+str(tBin)+"_imag" + "' from '" + self.inFileName + "'")
+					refHistIndex = inFile.Get(referenceWave+"_"+str(tBin)+"_index")
+					if not refHistIndex:
+						raise IOError("Could not get '" + referenceWave+"_"+str(tBin)+"_index" + "' from '" + self.inFileName + "'")
+					changeReferenceWave(histListReal, histListImag, histListIndx, comaHists, refHistReal, refHistImag, refHistIndex, self.startBin, self.stopBin)
 
 
 				ab = allBins(self.startBin, self.stopBin, histListReal, histListImag, histListNorm, histListIndx, comaHists,intHistsReal,intHistsImag)
 				for h in histListReal:
 					h.SetDirectory(0)
-
 				self.histListReal = histListReal
+
 			with root_open(self.zeroFileName, "READ") as inFile:
 				zeroCount = 0
 				zeroHistList  = []
@@ -190,6 +205,7 @@ class amplitudeAnalysis:
 			hists.append(tLine)
 		self.fillTotal(params, hists, binRange = binRange)
 		return hists
+
 
 	def fillTotal(self, params, hists, binRange = {}):
 		for t,tBin in enumerate(self.model):
@@ -357,7 +373,8 @@ class amplitudeAnalysis:
 			for i in range(len(res.x)):
 				errs.append((2.*hi[i,i])**.5)
 			print "errs before",errs
-			errs = estimateErrors2(self.model.chi2, pars, errs)
+			print "do not estimate errors!!!"
+#			errs = estimateErrors3(self.model.chi2, pars, errs)
 			for i in range(len(res.x)):
 				print "-/-/-/-/-/-/-/-/-/-",i,"-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-"
 

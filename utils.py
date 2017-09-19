@@ -299,6 +299,57 @@ def loadAmplsTM(inFileName):
 		raise ValueError("Not all amplitudes set")
 	return ampls
 
+def changeReferenceWave(histListReal, histListImag, histListIndx, comaHists, refHistReal, refHistImag, refHistIndex, startBin, stopBin):
+	"""
+	Transforms the COMA to another reference wave (But only for the indices in the given histograms)
+	"""
+	nHists = len(histListReal)
+	for iComa, iHist in enumerate(range(startBin, stopBin)):
+		dim      = comaHists[iComa].GetNbinsX()	
+		vals     = np.zeros(dim)
+		jacobian = np.zeros((dim,dim))
+		coma     = np.zeros((dim,dim))
+		for i in range(dim):
+			for j in range(dim):
+				coma[i,j] = comaHists[iComa].GetBinContent(i+1, j+1)
+		refIndex = refHistIndex.GetBinContent(iHist+1)
+		reRef  = refHistReal.GetBinContent(iHist+1)
+		imRef  = refHistImag.GetBinContent(iHist+1)
+		absRef = (reRef**2+imRef**2)**.5
+		vals[2*refIndex  ] = reRef
+		vals[2*refIndex+1] = imRef
+		for h in range(len(histListReal)):
+			for i in range(histListReal[h].GetNbinsY()):
+				index = histListIndx[h].GetBinContent(iHist+1, i+1)
+				if index == 0:
+					break
+				vals[2*index  ] = histListReal[h].GetBinContent(iHist+1, i+1)
+				vals[2*index+1] = histListImag[h].GetBinContent(iHist+1, i+1)
+				compl = (histListReal[h].GetBinContent(iHist+1, i+1) + 1.j *histListImag[h].GetBinContent(iHist+1, i+1))*(reRef-1.j*imRef)/absRef
+				histListReal[h].SetBinContent(iHist+1, i+1, compl.real)
+				histListImag[h].SetBinContent(iHist+1, i+1, compl.imag)
+
+
+
+		for i in range(dim/2): # *= (reRef - i imRef)/absRef
+			jacobian[2*i  ,2*i  ] = reRef/absRef # dReNew/dReOld
+			jacobian[2*i  ,2*i+1] = imRef/absRef # dReNew/dImOld
+			jacobian[2*i+1,2*i  ] =-imRef/absRef # dImNew/dReOld
+			jacobian[2*i+1,2*i+1] = reRef/absRef # dImNew/dImOld
+			
+			jacobian[2*i  ,2*refIndex  ] = vals[2*i  ]/absRef - (vals[2*i  ]*reRef + vals[2*i+1]*imRef)*reRef/absRef**3
+			jacobian[2*i  ,2*refIndex+1] = vals[2*i+1]/absRef - (vals[2*i  ]*reRef + vals[2*i+1]*imRef)*imRef/absRef**3
+			jacobian[2*i+1,2*refIndex  ] = vals[2*i+1]/absRef - (vals[2*i+1]*reRef - vals[2*i  ]*imRef)*reRef/absRef**3
+			jacobian[2*i+1,2*refIndex+1] =-vals[2*i  ]/absRef - (vals[2*i+1]*reRef - vals[2*i  ]*imRef)*imRef/absRef**3
+	
+
+		intermed = np.dot(jacobian, coma)
+		newComa  = np.dot(intermed, np.transpose(jacobian))
+
+		for i in range(dim):
+			for j in range(dim):
+				comaHists[iComa].SetBinContent(i+1,j+1, newComa[i,j])
+		
 
 def main():
 	checkLaTeX()

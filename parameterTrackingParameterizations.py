@@ -72,7 +72,39 @@ def lookupOmnes(s):
 	print "No lookup value found for s =",s
 	return 0.+0.j
 
-class omnesFunctionPolynomial:
+class parametersTrackingParameterization:
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+		count = 0
+		for i,v in enumerate(self.loadMap):
+			if v:
+				self.parameters[i].value = params[count]
+				count += 1
+
+	def setParametersAndErrors(self, params, errors):
+		if not len(errors) == self.nPar:
+			print "Number of errors does not match"
+			return False
+		if not len(params) == self.nPar:
+			print "Number of parameters does not match"
+			return False
+		count = 0
+		for i,v in enumerate(self.loadMap):
+			if v:
+				self.parameters[i].value = params[count]
+				self.parameters[i].error = errors[count]
+				count += 1
+		return True
+
+	def getParameters(self):
+		retVal = []
+		for i,v in enumerate(self.loadMap):
+			if v:
+				retVal.append(self.parameters[i].value)
+		return retVal
+
+class omnesFunctionPolynomial(parametersTrackingParameterization):
 	"""
 	Omnes polynomial allows to set parameters to real. For complex coefficients it it more efficient to use monomials
 	"""
@@ -135,38 +167,8 @@ class omnesFunctionPolynomial:
 			retVals[i] = poly * lookupOmnes(s)
 		return retVals
 
-	def setParameters(self, params):
-		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
-		count = 0
-		for i,v in enumerate(self.loadMap):
-			if v:
-				self.parameters[i].value = params[count]
-				count += 1
 
-	def setParametersAndErrors(self, params, errors):
-		if not len(errors) == self.nPar:
-			print "Number of errors does not match"
-			return False
-		if not len(params) == self.nPar:
-			print "Number of parameters does not match"
-			return False
-		count = 0
-		for i,v in enumerate(self.loadMap):
-			if v:
-				self.parameters[i].value = params[count]
-				self.parameters[i].error = errors[count]
-				count += 1
-		return True
-
-	def getParameters(self):
-		retVal = []
-		for i,v in enumerate(self.loadMap):
-			if v:
-				retVal.append(self.parameters[i].value)
-		return retVal
-
-class fixedParameterization:
+class fixedParameterization(parametersTrackingParameterization):
 	def __init__(self, path):
 		self.path       = path
 		self.parameters = []
@@ -178,14 +180,8 @@ class fixedParameterization:
 			retVals[i] = 1.
 		return retVals
 
-	def setParameters(self, params):
-		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
 
-	def getParameters(self):
-		return []
-
-class breitWigner:
+class breitWigner(parametersTrackingParameterization):
 	def __init__(self, parameters):
 		self.nPar       = 0
 		self.nParAll    = 2
@@ -209,40 +205,9 @@ class breitWigner:
 			retVals[i] = num/(den - m**2)
 		return retVals
 
-	def setParameters(self, params):
-		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
-		count = 0
-		for i,v in enumerate(self.loadMap):
-			if v:
-				self.parameters[i].value = params[count]
-				count += 1
-
-	def setParametersAndErrors(self, params, errors):
-		if not len(errors) == self.nPar:
-			print "Number of errors does not match"
-			return False
-		if not len(params) == self.nPar:
-			print "Number of parameters does not match"
-			return False
-		count = 0
-		for i,v in enumerate(self.loadMap):
-			if v:
-				self.parameters[i].value = params[count]
-				self.parameters[i].error = errors[count]
-				count += 1
-		return True
-
-	def getParameters(self):
-		retVal = []
-		for i,v in enumerate(self.loadMap):
-			if v:
-				retVal.append(self.parameters[i].value)
-		return retVal
-
 globalLfactor = 1 # probobly not needed anymore
 
-class relativisticBreitWigner:
+class relativisticBreitWigner(parametersTrackingParameterization):
 	def __init__(self, parameters, m1, m2, m3, J, L, fitPr = False):
 		self.L            = L * globalLfactor
 		self.J            = J * globalLfactor
@@ -308,38 +273,146 @@ class relativisticBreitWigner:
 				retVals[i] *= compensationFactor
 		return retVals
 
-	def setParameters(self, params):
-		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
-		count = 0
-		for i,v in enumerate(self.loadMap):
-			if v:
-				self.parameters[i].value = params[count]
-				count += 1
+class flatte(parametersTrackingParameterization):
+	def __init__(self, parameters, m1, m2, m3, m2nd1,m2nd2, J, L, fitPr = False):
+		self.L            = L * globalLfactor
+		self.J            = J * globalLfactor
+		self.m1           = m1
+		self.m2           = m2
+		self.m3           = m3
+		self.m2nd1        = m2nd1 # Masses for the second channel
+		self.m2nd2        = m2nd2 # Masses for the second channel
+		self.Pr           = 0.1973
+		self.nPar         = 0 # Number of parameters, this function handels
+		self.nParAll      = 3 # Number of parameters, this function uses
+		self.loadMap      = []
+		self.fitPr        = fitPr
+		self.parameters   = parameters
+		self.compensatePr = True # If True and self.fitPr, the resultung
+					 # amplitude will be compensated for 
+					 # self.pr. Meaning, that it will be 
+					 # assumed, that in the normalization, 
+					 # barrier factors with Pr = 0.1973 have
+					 # been used, which will be divided out 
+					 # again.
+		if self.fitPr:
+			self.nParAll += 2
+		if not len(parameters) == self.nParAll:
+			raise IndexError("Number of parameters does not match (" + str(len(parameters))+"/"+str(self.nParAll)+")")
+		for p in parameters:
+			if not p.lock:
+				self.loadMap.append(True)
+				self.nPar += 1
+				p.lock = True
+			else:
+				self.loadMap.append(False)
 
-	def setParametersAndErrors(self, params, errors):
-		if not len(errors) == self.nPar:
-			print "Number of errors does not match"
-			return False
-		if not len(params) == self.nPar:
-			print "Number of parameters does not match"
-			return False
-		count = 0
-		for i,v in enumerate(self.loadMap):
-			if v:
-				self.parameters[i].value = params[count]
-				self.parameters[i].error = errors[count]
-				count += 1
-		return True
+	def __call__(self, ms, externalKinematicVariables = []):
+		par = [p.value for p in self.parameters]
 
-	def getParameters(self):
-		retVal = []
-		for i,v in enumerate(self.loadMap):
-			if v:
-				retVal.append(self.parameters[i].value)
-		return retVal
+		if len(externalKinematicVariables) < 1:
+			raise IndexError("No external kinematic variable given")
 
-class integratedRelativisticBreitWigner:
+		M0 = par[0].real
+		g1 = par[1].real
+		g2 = par[2].real
+
+		q0 = physUtils.breakupMomentum(M0, self.m1, self.m2)
+
+		if q0 == 0.:
+			return np.asarray([0.+0.j]*len(ms), dtype = complex)
+		retVals = np.zeros((len(ms)), dtype = complex)
+		if self.fitPr:
+			PrMother = par[3]
+			PrIsob = par[4]
+		else:
+			PrMother = self.Pr
+			PrIsob = self.Pr
+
+		for i,M in enumerate(ms):
+			q = physUtils.breakupMomentum(M, self.m1, self.m2)
+			retVals[i] = physUtils.flatte(M,M0,g1,g2,self.m1,self.m2,self.m2nd1,self.m2nd2)
+			if self.fitPr and self.compensatePr:
+				compensationFactor = physUtils.barrierFactor(self.J, q, PrIsob)/physUtils.barrierFactor(self.J, q, self.Pr)
+				Q = physUtils.breakupMomentum(externalKinematicVariables[0],  M, self.m3)
+				if Q == 0.:
+					compensationFactor = 0.
+				else:
+					compensationFactor *= physUtils.barrierFactor(self.L, Q, PrMother)/physUtils.barrierFactor(self.L, Q, self.Pr)
+				retVals[i] *= compensationFactor
+		return retVals
+
+
+class relativisticBreitWignerRatio(parametersTrackingParameterization):
+	def __init__(self, parameters, m1, m2, m3, J, L, fitPr = False):
+		self.L            = L * globalLfactor
+		self.J            = J * globalLfactor
+		self.m1           = m1
+		self.m2           = m2
+		self.m3           = m3
+		self.Pr           = 0.1973
+		self.nPar         = 0          # Number of parameters, this function handels
+		self.nParAll      = 3 # Number of parameters, this function uses
+		self.loadMap      = []
+		self.fitPr        = fitPr
+		self.parameters   = parameters
+		self.compensatePr = True # If True and self.fitPr, the resultung
+					 # amplitude will be compensated for 
+					 # self.pr. Meaning, that it will be 
+					 # assumed, that in the normalization, 
+					 # barrier factors with Pr = 0.1973 have
+					 # been used, which will be divided out 
+					 # again.
+		if self.fitPr:
+			self.nParAll += 2
+		if not len(parameters) == self.nParAll:
+			raise IndexError("Number of parameters does not match (" + str(len(parameters))+"/"+str(self.nParAll)+")")
+		for p in parameters:
+			if not p.lock:
+				self.loadMap.append(True)
+				self.nPar += 1
+				p.lock = True
+			else:
+				self.loadMap.append(False)
+
+	def __call__(self, ms, externalKinematicVariables = []):
+		par = [p.value for p in self.parameters]
+
+		if len(externalKinematicVariables) < 1:
+			raise IndexError("No external kinematic variable given")
+
+		M0  = par[0].real
+		G0  = par[1].real
+		rat = abs(par[2].real)**.5 # Scaling ratio of real/imag
+
+		q0 = physUtils.breakupMomentum(M0, self.m1, self.m2)
+
+		if q0 == 0.:
+			return np.asarray([0.+0.j]*len(ms), dtype = complex)
+		retVals = np.zeros((len(ms)), dtype = complex)
+		if self.fitPr:
+			PrMother = par[3]
+			PrIsob   = par[4]
+		else:
+			PrMother = self.Pr
+			PrIsob   = self.Pr
+
+		for i,M in enumerate(ms):
+			q = physUtils.breakupMomentum(M, self.m1, self.m2)
+			retVals[i] = physUtils.breitWigner(M,M0,G0, self.J, q, q0, PrIsob)
+			if self.fitPr and self.compensatePr:
+				compensationFactor = physUtils.barrierFactor(self.J, q, PrIsob)/physUtils.barrierFactor(self.J, q, self.Pr)
+				Q = physUtils.breakupMomentum(externalKinematicVariables[0],  M, self.m3)
+				if Q == 0.:
+					compensationFactor = 0.
+				else:
+					compensationFactor *= physUtils.barrierFactor(self.L, Q, PrMother)/physUtils.barrierFactor(self.L, Q, self.Pr)
+				retVals[i] *= compensationFactor
+			retVals[i] = retVals[i].real*rat + 1.j*retVals[i].imag/rat
+		return retVals
+
+
+class integratedRelativisticBreitWigner(parametersTrackingParameterization):
 	def __init__(self, parameters, m1, m2, m3, J, L, binning, intensWeight = False, nPoints = 10, fitPr = False, reweightInverseBW = False):
 		self.L            = L * globalLfactor
 		self.J            = J * globalLfactor
@@ -432,37 +505,6 @@ class integratedRelativisticBreitWigner:
 				weight += ww
 			retVals[i] = retVal/weight
 		return retVals
-
-	def setParameters(self, params):
-		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
-		count = 0
-		for i,v in enumerate(self.loadMap):
-			if v:
-				self.parameters[i].value = params[count]
-				count += 1
-
-	def setParametersAndErrors(self, params, errors):
-		if not len(errors) == self.nPar:
-			print "Number of errors does not match"
-			return False
-		if not len(params) == self.nPar:
-			print "Number of parameters does not match"
-			return False
-		count = 0
-		for i,v in enumerate(self.loadMap):
-			if v:
-				self.parameters[i].value = params[count]
-				self.parameters[i].error = errors[count]
-				count += 1
-		return True
-
-	def getParameters(self):
-		retVal = []
-		for i,v in enumerate(self.loadMap):
-			if v:
-				retVal.append(self.parameters[i].value)
-		return retVal
 
 def main():
 	commonMass = parameter(1., 'commonMass')

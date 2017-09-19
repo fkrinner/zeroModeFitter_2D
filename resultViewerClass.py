@@ -188,6 +188,8 @@ class resultViewer:
 
 		self.noRun = noRun
 
+		self.connectPoints      = []
+
 		self.titleRight         = ""
 		self.tString            = ""
 		self.overrideMassString = ""
@@ -550,6 +552,14 @@ class resultViewer:
 					if self.nHists > 2 and self.plotTheo:
 						X,Y,COMA = self.getArgandData(nBin, 2, getCOMA = False)
 						plot.plot(X, Y, **{'marker' : None, 'markersize' : 0., 'linestyle' : 'solid', 'linewidth' : 1.,  'zorder' : 2, 'color': self.theoColor})
+						if len(self.connectPoints) > 0:
+							XD, YD, CD = self.getArgandData(nBin, 0, getCOMA = True)
+							for p in self.connectPoints:
+								if len(X) <= p:
+									print "WARNING: Connect point",p,"not possible. Index out of range"
+									continue
+								plot.plot([X[p],XD[p]],[Y[p],YD[p]], markersize = 0., color = 'k', linewidth = 0.1 )
+
 					if self.plotCorr:
 						X,Y,COMA = self.getArgandData(nBin, 0, getCOMA = True)
 						modernplotting.specialPlots.plotErrorEllipses(plot, X, Y, COMA, markerDefinitions = {'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 1, 'color' : self.corrColor, 'markersize' : 0.})

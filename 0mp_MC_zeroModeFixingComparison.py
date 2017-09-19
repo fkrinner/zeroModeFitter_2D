@@ -34,7 +34,7 @@ def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {})
 
 
 #	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
-	rho = ptc.integratedRelativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, binning, intensWeight = True, fitPr = False, reweightInverseBW = True)
+	rho = ptc.integratedRelativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, binning, intensWeight = False, fitPr = False, reweightInverseBW = True)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"0-+0+[pi,pi]1--PiP":[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
 	fitRho.loadData()
 	fitRho.finishModelSetup()
@@ -138,10 +138,10 @@ def main():
 	                      "fitRho2G"        : r"$\text{fit}_\rho^{2\Gamma}$",
 	                      "smooth"          : r"smooth"}
 
-	print "Starting with fixed shape f0"
-	fixedShapeF0 = doFixedShapes(inFileName, sectors[:1], startBin, stopBin, tBins)
-	allMethods["fixedShapeF0"] = fixedShapeF0
-	print "Finished with fixed shape f0"
+#	print "Starting with fixed shape f0"
+#	fixedShapeF0 = doFixedShapes(inFileName, sectors[:1], startBin, stopBin, tBins)
+#	allMethods["fixedShapeF0"] = fixedShapeF0
+#	print "Finished with fixed shape f0"
 
 	#	print "Starting with fixed shape rho"
 #	fixedShapeRho = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins)
@@ -158,10 +158,10 @@ def main():
 #	allMethods["fixedShapeRho2G"] = fixedShapeRho2G
 #	print "Finished with restricted rho (2 Gammas)"
 
-	print "Starting with fixed shapes"
-	fixedShapes = doFixedShapes(inFileName, sectors, startBin, stopBin, tBins)
-	allMethods["fixedShapes"] = fixedShapes
-	print "Finished with fixed shapes"
+#	print "Starting with fixed shapes"
+#	fixedShapes = doFixedShapes(inFileName, sectors, startBin, stopBin, tBins)
+#	allMethods["fixedShapes"] = fixedShapes
+#	print "Finished with fixed shapes"
 
 #	print "Starting with phase"
 #	fitPiPiSshape = doF0phase(inFileName, sectors[:1], startBin, stopBin, tBins)
@@ -171,13 +171,16 @@ def main():
 	print "Starting with fitting rho"
 	fitRho = doFitRho(inFileName, sectors, startBin, stopBin, tBins)
 	allMethods["fitRho"] = fitRho
-
-	fitRho.setZeroModeParameters(fixedShapes.getZeroModeParametersForMode())
-	for i in range(10):
-		x,err  = fitRho.fitShapeParametersForBinRange([mRho,Grho], [0], [i,i+1])
-		print x,err
 	print "Finished with fitting rho"
+
 	return
+
+#	fitRho.setZeroModeParameters(fixedShapes.getZeroModeParametersForMode())
+#	for i in range(10):
+#		x,err  = fitRho.fitShapeParametersForBinRange([mRho,Grho], [0], [i,i+1])
+#		print x,err
+#	print "Finished with fitting rho"
+#	return
 
 #	print "Starting with fitting restricted rho (1 Gamma)"
 #	fitRho1G = doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]1--PiP":(mRho - Grho, mRho+Grho)})

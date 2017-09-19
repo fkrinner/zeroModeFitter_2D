@@ -47,3 +47,14 @@ def breitWigner(m, m0, G0, L, q, q0, Pr):
 		return 0.+0.j
 	G = G0 * (m0/m) * (q/q0) * barrierFactorSquared(L, q, Pr)/barrierFactorSquared(L,q0, Pr)
 	return m0 * G0 / ( m0**2 - m**2 - 1.j*m0*G)
+
+def flatte(M,M0,g1,g2,m1,m2,m2nd1,m2nd2):
+	phi1 = 2*breakupMomentum(M,m1,m2)/M
+	if phi1 == 0.:
+		return 0.+0.j
+	phi2 = 2*breakupMomentum(M,m2nd1,m2nd2)/M
+	return 1./(M0**2 - M**2 -1.j*(phi1*g1 + phi2*g2))
+
+
+
+	

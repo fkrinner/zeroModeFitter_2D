@@ -48,6 +48,26 @@ def estimateErrors(func, minPoint, startErrors):
 		retVal.append(stepSizes[2*i+1]*maxI)
 	return retVal
 
+def estimateErrors3(func, pars, errsFromFitter, tolerance = 0.1):
+	centerEval = func(pars)
+	errs = []
+	for p in range(len(pars)):
+		def ff(x):
+			pars[p] += x
+			evl = func(pars)
+			pars[p] -= x
+			return evl - centerEval - 1.
+		errpl = scipy.optimize.brentq(ff, 0., errsFromFitter[p]*100.)
+		def ff(x):
+			pars[p] -= x
+			evl = func(pars)
+			pars[p] += x
+			return evl - centerEval - 1.
+		errmi = scipy.optimize.brentq(ff, 0., errsFromFitter[p]*100.)
+		errs.append((errpl + errmi)/2)
+	return errs
+		
+
 
 def estimateErrors2(func, pars, errsFromFitter, recursionLevel = 0, tolerance = 0.1, maxRecursionLevel = 10):
 	return errsFromFitter

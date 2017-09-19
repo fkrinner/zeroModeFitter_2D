@@ -340,6 +340,114 @@ def main():
 				out.write(str(hist.GetBinContent(i+1, j+1)) + ' ')
 			out.write('\n')
 
+	doRhoFits  = True
+	doRhoSfits = True
+	doRhoDfite = True
+	doF2fits   = True
+	if doRhoFits:
+#		fitRhoPR = doFitRhoPR(inFileName, sectors, startBin, stopBin, tBins)
+		with open("rhoMassesAndWidths_bigger1pp_"+str(tBin)+".dat",'w') as outFile:
+			for i in range(stopBin-startBin):
+				binIndex = i+startBin
+				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
+				startValueOffset = 0.01
+				exceptCount      = 0
+				while True:
+					try:
+#					if True:
+						x,err = fitBothRho.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
+						break
+					except:
+						print "Fitter exception encountered"
+						startValueOffset += 0.001
+						exceptCount      += 1	
+						if exceptCount > 3:
+							print "Too many failed attempts in bin "+str(i)+": "+str(exceptCount)
+#							raise Exception
+							x, err = [0.,0.],[0.,0.]
+							break
+
+				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
+				outFile.write('\n')			
+	if doRhoSfits:
+		fitRhoS = doFitRhoS(inFileName, sectors, startBin, stopBin, tBins)
+		with open("rhoMassesAndWidths_bigger1ppSP_"+str(tBin)+".dat",'w') as outFile:
+			for i in range(stopBin-startBin):
+				binIndex = i+startBin
+				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
+				startValueOffset = 0.01
+				exceptCount      = 0
+				while True:
+					try:
+#					if True:
+						x,err = fitRhoS.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
+						break
+					except:
+						print "Fitter exception encountered"
+						startValueOffset += 0.001
+						exceptCount      += 1	
+						if exceptCount > 3:
+							print "Too many failed attempts in bin "+str(i)+": "+str(exceptCount)
+#							raise Exception
+							x, err = [0.,0.],[0.,0.]
+							break
+
+				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
+				outFile.write('\n')			
+
+	if doRhoDfits:
+		fitRhoD = doFitRhoD(inFileName, sectors, startBin, stopBin, tBins)
+		with open("rhoMassesAndWidths_bigger1ppD_"+str(tBin)+".dat",'w') as outFile:
+			for i in range(stopBin-startBin):
+				binIndex = i+startBin
+				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
+				startValueOffset = 0.01
+				exceptCount      = 0
+				while True:
+					try:
+#					if True:
+						x,err = fitRhoD.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
+						break
+					except:
+						print "Fitter exception encountered"
+						startValueOffset += 0.001
+						exceptCount      += 1	
+						if exceptCount > 3:
+							print "Too many failed attempts in bin "+str(i)+": "+str(exceptCount)
+#							raise Exception
+							x, err = [0.,0.],[0.,0.]
+							break
+
+				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
+				outFile.write('\n')			
+
+	if doF2Fits:
+		with open("f2MassesAndWidths_bigger1pp_"+str(tBin)+".dat",'w') as outFile:
+			for i in range(stopBin-startBin):
+				binIndex = i+startBin
+				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
+				startValueOffset = 0.01
+				exceptCount      = 0
+				while True:
+					try:
+#					if True:
+						x,err = fitF2.fitShapeParametersForBinRange([mF2+startValueOffset,GF2+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
+						break
+					except:
+						print "Fitter exception encountered"
+						startValueOffset += 0.001
+						exceptCount      += 1	
+						if exceptCount > 3:
+							print "Too many failed attempts in bin "+str(i)+": "+str(exceptCount)
+#							raise Exception
+							x, err = [0.,0.],[0.,0.]
+							break
+
+				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
+				outFile.write('\n')			
+
+	if doRhoFits or doRhoSfits or doRhoDfite or doF2fits:
+		return
 
 ##### Writing starts here
 
