@@ -104,6 +104,9 @@ class parametersTrackingParameterization:
 				retVal.append(self.parameters[i].value)
 		return retVal
 
+	def returnParameters(self):
+		return self.parameters
+
 class omnesFunctionPolynomial(parametersTrackingParameterization):
 	"""
 	Omnes polynomial allows to set parameters to real. For complex coefficients it it more efficient to use monomials
@@ -206,6 +209,37 @@ class breitWigner(parametersTrackingParameterization):
 		return retVals
 
 globalLfactor = 1 # probobly not needed anymore
+
+class complexPolynomial(parametersTrackingParameterization):
+	def __init__(self, degree, parameters):
+		self.degree = degree
+		if not len(parameters) == 2*self.degree:
+			raise IndexError("Number of parameters does not match")
+		self.parameters = parameters
+		self.loadMap      = []
+		self.nParAll      = 2*degree
+		self.nPar         = 0
+		self.baseExponent = 1 # Can be adjusted (2 e.g. gives a polynomial in s = m**2)
+		for p in parameters:
+			if not p.lock:
+				self.loadMap.append(True)
+				self.nPar += 1
+				p.lock = True
+			else:
+				self.loadMap.append(False)
+
+	def __call__(self,ms, externalKinematicVariables):
+		retVals = np.zeros((len(ms)), dtype = complex)
+		par = [p.value for p in self.parameters]
+		for i, m in enumerate(ms):
+			val     = 1.+0.j
+			massExp = 1.
+			for j in range(self.degree):
+				massExp *= m**self.baseExponent
+				val += (par[2*j] + 1.j*par[2*j+1]) * massExp
+			retVals[i] = val
+		return retVals
+	
 
 class relativisticBreitWigner(parametersTrackingParameterization):
 	def __init__(self, parameters, m1, m2, m3, J, L, fitPr = False):
@@ -411,7 +445,6 @@ class relativisticBreitWignerRatio(parametersTrackingParameterization):
 			retVals[i] = retVals[i].real*rat + 1.j*retVals[i].imag/rat
 		return retVals
 
-
 class integratedRelativisticBreitWigner(parametersTrackingParameterization):
 	def __init__(self, parameters, m1, m2, m3, J, L, binning, intensWeight = False, nPoints = 10, fitPr = False, reweightInverseBW = False):
 		self.L            = L * globalLfactor
@@ -505,6 +538,38 @@ class integratedRelativisticBreitWigner(parametersTrackingParameterization):
 				weight += ww
 			retVals[i] = retVal/weight
 		return retVals
+
+class timesBF:
+	def __init__(self, BW):
+		self.BW   = BW
+		self.m1   = BW.m1
+		self.m2   = BW.m2
+		self.m3   = BW.m3
+		self.L    = BW.L
+		self.J    = BW.J
+		self.Pr   = BW.Pr
+		self.nPar = BW.nPar
+
+	def __call__(self, ms, externalKinematicVariables = []):
+		retVals = self.BW(ms, externalKinematicVariables)
+		for i,m in enumerate(ms):
+			q   = physUtils.breakupMomentum(m,self.m1, self.m2)
+			Q   = physUtils.breakupMomentum(externalKinematicVariables[0], m, self.m3)
+			BFs = physUtils.barrierFactor(self.L, Q, self.Pr)*physUtils.barrierFactor(self.J, q, self.Pr)
+			retVals[i] *= BFs
+		return retVals
+
+	def setParameters(self, params):
+		self.BW.setParameters(params)
+
+	def setParametersAndErrors(self, params, errors):
+		return self.BW.setParametersAndErrors(params, errors)
+
+	def getParameters(self):
+		return self.BW.getParameters()
+	
+	def returnParameters(self):
+		return self.BW.returnParameters()
 
 def main():
 	commonMass = parameter(1., 'commonMass')

@@ -10,7 +10,7 @@ from utils import sumUp, weightedSum, cloneZeros, checkLaTeX
 import sys
 import pyRootPwa
 import numpy as np
-
+from globalDefinitions import referenceWave, mPi, mK,mRho,Grho,mRhoPrime,GrhoPrime,mF0,g1,g2,mF2,GF2,Pr0
 from rootfabi import root_open
 import LaTeX_strings
 
@@ -20,16 +20,8 @@ import modernplotting.mpplot
 import modernplotting.toolkit
 import modernplotting.specialPlots as mpsp
 import studyPlotter
-mPi      = 0.13957018
-mK       = 0.493677
 
-mRho     =  .77549
-Grho     =  .1491
-
-mF2 = 1.2751
-GF2 = 0.1851
-
-def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
+def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = "", writeResultToFile = None):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
 	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
@@ -40,6 +32,12 @@ def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {},
 	fitRho.calculateNonShapeParameters()
 	fitRho.mode = AMPL
 #	fitRho.removeGlobalPhaseFromComa()
+	if writeResultToFile:
+		with open(writeResultToFile, 'a') as outFile:
+			if len(tBins) > 1:
+				raise ValueError("More than one t' bin not supported")
+			resultString = str(tBins[0])+ " 666. " + str(rhoMass.value) + ' ' + str(rhoMass.error) + ' ' + str(rhoWidth.value) + ' ' + str(rhoWidth.error) + "\n"
+			outFile.write(resultString)
 	return fitRho
 
 alphabet = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
@@ -100,7 +98,6 @@ def main():
 	style.p2dColorMap = 'Reds'
 
 	inFileName    = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_exotic.root"
-	referenceWave = "4-+0+rhoPiF"
 	sectors          = ["1-+1+[pi,pi]1--PiP"]
 	tBin = int(sys.argv[1])
 	if tBin < 0 or tBin > 3:
@@ -111,8 +108,8 @@ def main():
 	startBin         = 13
 	stopBin          = 50
 
-#	startBin = 21
-#	stopBin  = 22
+#	startBin = 26
+#	stopBin  = 28
 
 	methodBinRanges = {
 	                   "fitF2"        : (22, 50),
@@ -263,7 +260,7 @@ def main():
 				startValueOffset = 0.00
 				exceptCount      = 0
 				try:
-					x,err = fitRho.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
+					x,err,c2,ndf = fitRho.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
 				except:
 					print "Fitter exception encountered"
 					startValueOffset += 0.001
@@ -272,7 +269,7 @@ def main():
 						raise Exception("Too many failed attempts: "+str(exceptCount))
 	
 				out.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
-				out.write('\n')			
+				out.write(' '+str(c2/ndf)+'\n')			
 		return
 ##### Writing starts here
 
@@ -300,24 +297,42 @@ def main():
 					fileNames[sect,bin] = []
 				fileNames[sect,bin].append(fileName)
 				rv.writeAmplFiles(bin, fileName = fileName)
-
-	folder = "./comparisonResultsData_1mp_scale/"
+	scalle = False
+	if scalle:
+		folder = "./comparisonResultsData_1mp_scale/"
+	else:
+		folder = "./comparisonResultsData_1mp/"
 
 	for s, sect in enumerate(allMethods['fixedShapes'].sectors):
 		allMethods['fixedShapes'].removeZeroModeFromComa()
 #		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
 		rv = allMethods['fixedShapes'].produceResultViewer(resolvedWA,s, noRun = True, plotTheory = True)
 #		rv.plotData = False
-		rv.scaleTo = "maxCorrData"
 		rv.writeBinToPdf(startBin, stdCmd = [ folder + sect + "_data_2D_"+str(tBin)+".pdf", "", [], "", []])
+		rv.labelPoints     = [0,10,15,20]
+		rv.makeLegend      = True
+		if scalle:
+			rv.scaleTo = "maxCorrData"
+			rv.yAxisShift      = 300.
+			rv.tStringYpos     = 0.8
+			rv.topMarginIntens = 1.4
+			fakkkk             = 1.
+		else:
+			rv.plotData        = False
+			fakkkk             = .7	
+			rv.tStringYpos     = 0.865
+			rv.topMarginIntens = 1.3
+			rv.yAxisShift      = 100.
+		rv.shiftMap        = {0:(fakkkk*50.,fakkkk*-280.),10:(fakkkk*-420.,fakkkk*-50.), 15:(fakkkk*-420.,fakkkk*-30.), 20:(fakkkk*-50.,fakkkk*70.)}
 		for b in range(startBin, stopBin):
 			intensNames = [name+".intens" for name in fileNames[sect,b]]
 			argandNames = [name+".argand" for name in fileNames[sect,b]]
 #			intensNames = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/evalDima/dima.intens"]
 #			argandNames = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/evalDima/dima.argand"]
-#			intensNames = []
-#			argandNames = []
-
+			if not scalle:
+				intensNames = []
+				argandNames = []
+	
 			rv.writeBinToPdf(b, stdCmd = ["", folder + sect + "_data_intens_"+str(b)+"_"+str(tBin)+".pdf", intensNames,  folder + sect + "_data_argand_"+str(b)+"_"+str(tBin)+".pdf", argandNames])
 	print studyList
 

@@ -10,7 +10,7 @@ from utils import sumUp, weightedSum, cloneZeros, checkLaTeX
 import sys
 import pyRootPwa
 import numpy as np
-
+from globalDefinitions import referenceWave, mPi, mK,mRho,Grho,mRhoPrime,GrhoPrime,mF0,g1,g2,mF2,GF2,Pr0
 from rootfabi import root_open
 
 import consistencyUtils as cu
@@ -20,21 +20,13 @@ import modernplotting.mpplot
 import modernplotting.toolkit
 import modernplotting.specialPlots as mpsp
 import studyPlotter
-mPi      = 0.13957018
-mK       = 0.493677
 
-mRho     =  .77549
-Grho     =  .1491
-
-mF2      = 1.2751
-GF2      = 0.1851
-
-def doFitRhoS(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
+def doFitRhoS(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
 	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 0, False)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"1++0+[pi,pi]1--PiS":[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap, zeroFileName = zeroFileName)
-	fitRho.loadData()
+	fitRho.loadData(referenceWave = referenceWave)
 	fitRho.finishModelSetup()
 	fitRho.fitShapeParameters()
 	fitRho.calculateNonShapeParameters()
@@ -42,12 +34,12 @@ def doFitRhoS(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sector
 #	fitRho.removeGlobalPhaseFromComa()
 	return fitRho
 
-def doFitRhoD(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
+def doFitRhoD(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
 	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 2, False)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"1++0+[pi,pi]1--PiD":[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap, zeroFileName = zeroFileName)
-	fitRho.loadData()
+	fitRho.loadData(referenceWave = referenceWave)
 	fitRho.finishModelSetup()
 	fitRho.fitShapeParameters()
 	fitRho.calculateNonShapeParameters()
@@ -55,13 +47,13 @@ def doFitRhoD(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sector
 #	fitRho.removeGlobalPhaseFromComa()
 	return fitRho
 
-def doFitBothRho(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
+def doFitBothRho(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
 	rhoS = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 0, False)
 	rhoD = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 2, False)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"1++0+[pi,pi]1--PiS":[rhoS], "1++0+[pi,pi]1--PiD" : [rhoD]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap, zeroFileName = zeroFileName)
-	fitRho.loadData()
+	fitRho.loadData(referenceWave = referenceWave)
 	fitRho.finishModelSetup()
 	fitRho.fitShapeParameters()
 	fitRho.calculateNonShapeParameters()
@@ -69,12 +61,12 @@ def doFitBothRho(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sec
 #	fitRho.removeGlobalPhaseFromComa()
 	return fitRho
 
-def doFitF2(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
+def doFitF2(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
 	f2Mass  = ptc.parameter( mF2,  "f2Mass" )
 	f2Width = ptc.parameter( GF2 , "f2Width")
 	f2 = ptc.relativisticBreitWigner([f2Mass,f2Width], mPi, mPi, mPi, 2, 0, False)
 	fitF2 = amplitudeAnalysis(inFileName, sectors, {"1++0+[pi,pi]2++PiP":[f2]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap, zeroFileName = zeroFileName)
-	fitF2.loadData()
+	fitF2.loadData(referenceWave = referenceWave)
 	fitF2.finishModelSetup()
 	fitF2.fitShapeParameters()
 	fitF2.calculateNonShapeParameters()
@@ -86,7 +78,7 @@ def doFitF2(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRa
 
 alphabet = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
 
-def doFixedShapes(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
+def doFixedShapes(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
 	waveModel = {}
 	for n,sector in enumerate(sectors):
 		model = []
@@ -97,7 +89,7 @@ def doFixedShapes(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, se
 			model.append(param)
 		waveModel[sector] = model
 	fixedShapes = amplitudeAnalysis(inFileName, sectors, waveModel, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap, zeroFileName = zeroFileName)
-	fixedShapes.loadData(loadIntegrals = True)
+	fixedShapes.loadData(loadIntegrals = True, referenceWave = referenceWave)
 	fixedShapes.finishModelSetup()
 	fixedShapes.fitShapeParameters()
 	fixedShapes.calculateNonShapeParameters()
@@ -105,10 +97,10 @@ def doFixedShapes(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, se
 #	fixedShapes.removeGlobalPhaseFromComa()
 	return fixedShapes
 
-def doSmooth(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
+def doSmooth(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
 	waveModel = {}
 	smooth = amplitudeAnalysis(inFileName, sectors, waveModel, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap, zeroFileName = zeroFileName)
-	smooth.loadData()
+	smooth.loadData(referenceWave = referenceWave)
 	smooth.finishModelSetup()
 	smooth.mode = SMOOTH
 #	smooth.removeGlobalPhaseFromComa()
@@ -144,7 +136,9 @@ def main():
 #	inFileName   = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
 	inFileName   = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_bigger1pp.root"
 	zeroFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/zeroModes_bigger1pp.root"
+
 	sectors          = ["1++0+[pi,pi]0++PiP", "1++0+[pi,pi]1--PiS", "1++0+[pi,pi]1--PiD", "1++0+[pi,pi]2++PiP"]
+
 	tBin = int(sys.argv[1])
 	if tBin < 0 or tBin > 3:
 		raise ValueError("Invalid t' bin: " + str(tBin))
@@ -177,32 +171,32 @@ def main():
 	                      "smooth"            : r"smooth"}
 
 	print "Starting with fixed shape f0"
-	fixedShapeF0 = doFixedShapes(inFileName,zeroFileName, sectors[:1], startBin, stopBin, tBins)
+	fixedShapeF0 = doFixedShapes(inFileName,zeroFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave)
 	allMethods["fixedShapeF0"] = fixedShapeF0
 	print "Finished with fixed shape f0"
 
 #	print "Starting with fixed shape rhoP"
-#	fixedShapeRhoP = doFixedShapes(inFileName, [sectors[1]], startBin, stopBin, tBins)
+#	fixedShapeRhoP = doFixedShapes(inFileName, [sectors[1]], startBin, stopBin, tBins, referenceWave = referenceWave)
 #	allMethods["fixedShapeRhoP"] = fixedShapeRhoP
 #	print "Finished with fixed shape rhoP"
 
 #	print "Starting with fixed shape rhoF"
-#	fixedShapeRhoF = doFixedShapes(inFileName, [sectors[2]], startBin, stopBin, tBins)
+#	fixedShapeRhoF = doFixedShapes(inFileName, [sectors[2]], startBin, stopBin, tBins, referenceWave = referenceWave)
 #	allMethods["fixedShapeRhoF"] = fixedShapeRhoF
 #	print "Finished with fixed shape rhoF"
 
 #	print "Starting with fixed shape bothRho"
-#	fixedShapeBothRho = doFixedShapes(inFileName, sectors[1:3], startBin, stopBin, tBins)
+#	fixedShapeBothRho = doFixedShapes(inFileName, sectors[1:3], startBin, stopBin, tBins, referenceWave = referenceWave)
 #	allMethods["fixedShapeBothRho"] = fixedShapeBothRho
 #	print "Finished with fixed shape bothRho"
 
 #	print "Starting with fixed shape f2"
-#	fixedShapeF2 = doFixedShapes(inFileName, [sectors[3]], startBin, stopBin, tBins)
+#	fixedShapeF2 = doFixedShapes(inFileName, [sectors[3]], startBin, stopBin, tBins, referenceWave = referenceWave)
 #	allMethods["fixedShapeF2"] = fixedShapeF2
 #	print "Finished with fixed shape f2"
 
 	print "Starting with fixed shapes"
-	fixedShapes = doFixedShapes(inFileName,zeroFileName, sectors, startBin, stopBin, tBins)
+	fixedShapes = doFixedShapes(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
 	allMethods["fixedShapes"] = fixedShapes
 	print "Finished with fixed shapes"
 	fullSig = fixedShapes.getZeroModeSignature()
@@ -215,33 +209,33 @@ def main():
 #	return
 
 ##	print "Starting with phase"
-##	fitPiPiSshape = doF0phase(inFileName, sectors[:1], startBin, stopBin, tBins)
+##	fitPiPiSshape = doF0phase(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave)
 ##	allMethods["pipiS"] = fitPiPiSshape
 ##	print "Finished with phase"
 
 #	print "Starting with fitting rhoP"
-#	fitRhoP = doFitRhoP(inFileName, sectors, startBin, stopBin, tBins)
+#	fitRhoP = doFitRhoP(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
 #	allMethods["fitRhoP"] = fitRhoP
 #	print "Finished with fitting rhoP"
 
 #	print "Starting with fitting rhoF"
-#	fitRhoF = doFitRhoF(inFileName, sectors, startBin, stopBin, tBins)
+#	fitRhoF = doFitRhoF(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
 #	allMethods["fitRhoF"] = fitRhoF
 #	print "Finished with fitting rhoF"
 
 	print "Starting with fitting bothRho"
-	fitBothRho = doFitBothRho(inFileName,zeroFileName, sectors, startBin, stopBin, tBins)
+	fitBothRho = doFitBothRho(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
 	allMethods["fitBothRho"] = fitBothRho
 	print "Finished with fitting bothRho"
 
-#	print "Starting with fitting f2"
-#	fitF2 = doFitF2(inFileName,zeroFileName, sectors, startBin, stopBin, tBins)
-#	allMethods["fitF2"] = fitF2
-#	print "Finished with fitting f2"
+	print "Starting with fitting f2"
+	fitF2 = doFitF2(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
+	allMethods["fitF2"] = fitF2
+	print "Finished with fitting f2"
 
 	if stopBin - startBin > 1:
 		print "Starting with smooth"
-		smooth = doSmooth(inFileName,zeroFileName, sectors, startBin, stopBin, tBins)
+		smooth = doSmooth(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
 		allMethods["smooth"] = smooth
 		print "Finished with smooth"
 
@@ -340,10 +334,10 @@ def main():
 				out.write(str(hist.GetBinContent(i+1, j+1)) + ' ')
 			out.write('\n')
 
-	doRhoFits  = True
-	doRhoSfits = True
-	doRhoDfite = True
-	doF2fits   = True
+	doRhoFits  = False
+	doRhoSfits = False
+	doRhoDfite = False
+	doF2fits   = False
 	if doRhoFits:
 #		fitRhoPR = doFitRhoPR(inFileName, sectors, startBin, stopBin, tBins)
 		with open("rhoMassesAndWidths_bigger1pp_"+str(tBin)+".dat",'w') as outFile:
@@ -355,7 +349,7 @@ def main():
 				while True:
 					try:
 #					if True:
-						x,err = fitBothRho.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
+						x,err,c2,ndf = fitBothRho.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
 						break
 					except:
 						print "Fitter exception encountered"
@@ -368,7 +362,7 @@ def main():
 							break
 
 				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
-				outFile.write('\n')			
+				outFile.write(' '+str(c2/ndf)+'\n')			
 	if doRhoSfits:
 		fitRhoS = doFitRhoS(inFileName, sectors, startBin, stopBin, tBins)
 		with open("rhoMassesAndWidths_bigger1ppSP_"+str(tBin)+".dat",'w') as outFile:
@@ -380,7 +374,7 @@ def main():
 				while True:
 					try:
 #					if True:
-						x,err = fitRhoS.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
+						x,err,c2,ndf = fitRhoS.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
 						break
 					except:
 						print "Fitter exception encountered"
@@ -393,7 +387,7 @@ def main():
 							break
 
 				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
-				outFile.write('\n')			
+				outFile.write(' '+str(c2/ndf)+'\n')			
 
 	if doRhoDfits:
 		fitRhoD = doFitRhoD(inFileName, sectors, startBin, stopBin, tBins)
@@ -406,7 +400,7 @@ def main():
 				while True:
 					try:
 #					if True:
-						x,err = fitRhoD.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
+						x,err,c2,ndf = fitRhoD.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
 						break
 					except:
 						print "Fitter exception encountered"
@@ -419,7 +413,7 @@ def main():
 							break
 
 				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
-				outFile.write('\n')			
+				outFile.write(' '+str(c2/ndf)+'\n')			
 
 	if doF2Fits:
 		with open("f2MassesAndWidths_bigger1pp_"+str(tBin)+".dat",'w') as outFile:
@@ -431,7 +425,7 @@ def main():
 				while True:
 					try:
 #					if True:
-						x,err = fitF2.fitShapeParametersForBinRange([mF2+startValueOffset,GF2+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
+						x,err,c2,ndf = fitF2.fitShapeParametersForBinRange([mF2+startValueOffset,GF2+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
 						break
 					except:
 						print "Fitter exception encountered"
@@ -444,7 +438,7 @@ def main():
 							break
 
 				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
-				outFile.write('\n')			
+				outFile.write(' '+str(c2/ndf)+'\n')			
 
 	if doRhoFits or doRhoSfits or doRhoDfite or doF2fits:
 		return

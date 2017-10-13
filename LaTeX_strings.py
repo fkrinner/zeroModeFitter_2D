@@ -34,17 +34,19 @@ def getMassString(mMin, mMax):
 	return retVal
 
 m3Pi = r"$m_{3\pi}\,[\text{GeV}/c^2]$"
-m2Pi = r"$m_{\pi^-\pi^+}\,[\text{GeV}/c^2]$"
+#m2Pi = r"$m_{\pi^-\pi^+}\,[\text{GeV}/c^2]$"
+m2Pi = r"$m_{2\pi}\,[\text{GeV}]$"
 #m2Pi = r"$m_{\pi^+\pi^-}\,[$GeV$/c]$"
 
 #intens = r"Intensity [A.U.]"
-intens = r"Intensity [Events/(GeV/$c^2$)]"
+#intens = r"Intensity [Events/(GeV/$c^2$)]"
+intens = r"Intensity [events/40\,MeV]"
 
-#real = r"$\Re\,[\sqrt{\text{events/40\,MeV}}]$"
-#imag = r"$\Im\,[\sqrt{\text{events/40\,MeV}}]$"
+real = r"$\Re\,[\sqrt{\text{events/40\,MeV}}]$"
+imag = r"$\Im\,[\sqrt{\text{events/40\,MeV}}]$"
 
-real = r"Re$(\mathcal{T}_\text{bin})\,[(\text{Events}/(\text{GeV}/c^2))^{1/2}]$"
-imag = r"Im$(\mathcal{T}_\text{bin})\,[(\text{Events}/(\text{GeV}/c^2))^{1/2}]$"
+#real = r"Re$(\mathcal{T}_\text{bin})\,[(\text{Events}/(\text{GeV}/c^2))^{1/2}]$"
+#imag = r"Im$(\mathcal{T}_\text{bin})\,[(\text{Events}/(\text{GeV}/c^2))^{1/2}]$"
 
 
 # self.overrideMassString = r"$m_{3\pi} = 1.87$GeV$c$"

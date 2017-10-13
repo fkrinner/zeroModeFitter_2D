@@ -96,6 +96,23 @@ class tBinHolder:
 			count += nNon
 		return chi2
 
+	def getFixedZMndf(self):
+		"""
+		Returns the NDF for the chi2 function of fixedZMPchi2
+		"""
+		if len(self.binsToEvaluate) == 0:
+			raise RuntimeError("No bins to evaluate set")
+		NDF    = 0
+		nShape = None
+		for i in self.binsToEvaluate:
+			ndf, nSh = self.bins[i].getFixedZMndf()
+			NDF += ndf
+			if not nShape:
+				nShape = nSh
+			elif not nShape == nSh:
+				raise IndexError("nShape mismatch in t' sum NDF method")
+		return NDF - nSh
+
 	def fixedZMPchi2(self, pars):
 		"""
 		Returns a chi2 for the shape parameters and self.zeroModeParameters. The couplings are calculated. Sums over all bins in self.binsToEvaluate
@@ -108,6 +125,9 @@ class tBinHolder:
 		return chi2
 
 	def setBinsToEvalueate(self, tBinsToEvaluate,mBinsToEvaluate):
+		"""
+		Sets the t' and m bins to evaluate in "fitRho.fitShapeParametersForBinRange()" in the analysisclass
+		"""
 		self.binsToEvaluate = tBinsToEvaluate
 		for bin in self.bins:
 			bin.setBinsToEvalueate(mBinsToEvaluate)

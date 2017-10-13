@@ -131,12 +131,10 @@ def main():
 
 	for s, sect in enumerate(allMethods['fixedShapes'].sectors):
 		allMethods['fixedShapes'].removeZeroModeFromComa()
-		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
+#		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
 		rv = allMethods['fixedShapes'].produceResultViewer(resolvedWA,s, noRun = True, plotTheory = True)
 		rv.writeBinToPdf(startBin, stdCmd = [ folder + sect + "_data_2D_"+str(tBin)+".pdf", "", [], "", []])
-
-		continue
-
+#		continue
 		for b in range(startBin, stopBin):
 			intensNames = [name+".intens" for name in fileNames[sect,b]]
 			argandNames = [name+".argand" for name in fileNames[sect,b]]

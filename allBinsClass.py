@@ -95,7 +95,7 @@ class allBins:
 
 	def nParAll(self):
 		"""
-		Gets the total number of parameters (Makes no asusmptions)
+		Gets the total number of parameters (Makes no assumptions)
 		"""
 		nPar = 0
 		for mb in self.massBins:
@@ -124,6 +124,32 @@ class allBins:
 		else:
 			return chi2
 
+	def getFcnCpls(self, zeroModeParameters):
+		"""
+		Returns function couplings for a given set of zero mode coefficients (with fixed shape parameters)
+		"""
+		fcnCpls = []
+		for m,mb in enumerate(self.massBins):
+			fcnCpls.append(mb.getFcnCpls(zeroModeParameters[m]))
+		return fcnCpls
+
+	def getFixedZMndf(self):
+		"""
+		Returns the NDF for the chi2 function of fixedZMPchi2
+		"""
+		if len(self.binsToEvaluate) == 0:
+			raise RuntimeError("No bins to evaluate set")
+		NDF = 0
+		nShape = None
+		for i in self.binsToEvaluate:
+			ndf, ndfZero, ndfFunc, nPar = self.massBins[i].getNDF()
+			NDF += ndf - ndfZero - ndfFunc
+			if not nShape:
+				nShape = nPar
+			elif nShape != nPar:
+				raise IndexError("nShape mismatch in m sum NDF method")
+		return NDF, nShape
+
 	def fixedZMPchi2(self, pars):
 		"""
 		Returns a chi2 for the shape parameters and self.zeroModeParameters. The couplings are calculated. Sums over all bins in self.binsToEvaluate
@@ -136,6 +162,9 @@ class allBins:
 		return chi2
 
 	def setBinsToEvalueate(self, mBinsToEvaluate):
+		"""
+		Sets the m bins to evaluate in "fitRho.fitShapeParametersForBinRange()" in the analysisclass
+		"""
 		self.binsToEvaluate = mBinsToEvaluate
 
 	def getNonShapeUncertainties(self, shapeParams = []):
@@ -397,6 +426,9 @@ class allBins:
 			parCount += nz
 
 	def fillTotal(self, params, hists, binRange = {}):
+		"""
+		Fills spin totals in histograms
+		"""
 		parCount = 0
 		for mb in self.massBins:
 			nz = 2*mb.nZero

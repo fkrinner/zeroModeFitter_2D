@@ -21,12 +21,12 @@ from utils import get3PiHistogram, loadAmplsTM
 def main(rhoFileName = ""):
 	checkLaTeX()
 # # # #  Monte-Carlo results
-#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
+	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC_corrected.root"
 #	inFileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/ppppppppp/DpPiPiPi_forReleaseNote.root"
 #	inFileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/ppppppppp/DpPiPiPi_versionInPaper.root"
 # # # # Real-data results
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_three0pp.root"
-	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/std11_withIntegral.root"
+#	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/std11_withIntegral.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_bigger1pp.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_exotic.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_bigger2pp.root"
@@ -40,6 +40,9 @@ def main(rhoFileName = ""):
 	fourPPamplFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/ampls_4++1+rhoPiG.dat"
 
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
+
+	zeroFileName = inFileName
+
 #	sectors = ["Dp[pi,pi]0++PiS","Dp[pi,pi]1--PiP"]
 #	sectors = ["Dp[pi,pi]0++PiS"]
 #	sectors = ["Dp[pi,pi]1--PiP"]
@@ -54,7 +57,7 @@ def main(rhoFileName = ""):
 # # # # # Bigger 1++ definitions
 #	sectors = std11_1pp0p + ["1++0+[pi,pi]1--PiD", "1++0+[pi,pi]2++PiP"]
 # # # # # Exotic (1-+)
-	sector_exotic = ["1-+1+[pi,pi]1--PiP"]
+#	sector_exotic = ["1-+1+[pi,pi]1--PiP"]
 # # # # # Bigger 2++ definitions
 #	sectors = std11_2pp1p + ["2++1+[pi,pi]2++PiP"]
 # # # # # Bigger 2-+ definitions
@@ -72,15 +75,16 @@ def main(rhoFileName = ""):
 # # # # # 6-+
 #	sectors = ["6-+0+[pi,pi]1--PiH"]
 
-#	sectors = std11_0mp0p
+	sectors = std11_0mp0p
 #	sectors = sector_exotic
 #	sectors = std11_1pp0p
 #	sectors = std11_1pp1p
 #	sectors = std11_2mp0p
 #	sectors = std11_2mp1p
-	sectors = std11_2pp1p
+#	sectors = std11_2pp1p
 
-	referenceWave = "4-+0+rhoPiF"
+#	referenceWave = "4-+0+rhoPiF"
+	referenceWave = ""
 
 #	sectors = std11_0mp0p[:1]
 
@@ -106,13 +110,13 @@ def main(rhoFileName = ""):
 			pass
 #			sectorRangeMap[sector] = (0.,.94)
 
-	tBin             = 2
-	startBin         = 10
-	stopBin          = 50
+	tBin             = 0
+#	startBin         = 10
+#	stopBin          = 50
 #	startBin         = 34
 #	stopBin          = 35
-#	startBin         = 25
-#	stopBin          = 50
+	startBin         = 25
+	stopBin          = 26
 	polynomialDegree = 0
 	modelMode        = "fixedShapes"
 #	modelMode        = "fixedRhoExotic"
@@ -124,7 +128,7 @@ def main(rhoFileName = ""):
 	useSmooth        = False
 	fitShape         = True
 	phaseFit         = False
-	produceTotals = False
+	produceTotals    = False
 	if modelMode == "BW" or modelMode == "2BW":
 #		rho = pc.breitWigner()
 		rho = pc.rpwaBreitWignerInt(0.13957018,0.13957018,0.13957018,1,0)
@@ -173,12 +177,17 @@ def main(rhoFileName = ""):
 #		rhoMass  = ptc.parameter(.77  + .2 + .5, "rhoMass")
 #		rhoWidth = ptc.parameter(.16  + .1 + .1, "rhoWidth")
 
-		rhoMass  = ptc.parameter(.77 + .2 + .3 , "rhoMass")
-		rhoWidth = ptc.parameter(.16 + .1 + .1, "rhoWidth")
+		rhoMass  = ptc.parameter(.77, "rhoMass")
+		rhoWidth = ptc.parameter(.16, "rhoWidth")
 
+#		rhoMass  = ptc.parameter(.77 + .2  , "rhoMass")
+#		rhoWidth = ptc.parameter(.16 + .1 , "rhoWidth")
 
-		rhoPMass  = ptc.parameter(1.4, "rhoMass")
-		rhoPWidth = ptc.parameter(0.2, "rhoWidth")
+#		rhoMass  = ptc.parameter(.77 + .2 + .3 , "rhoMass")
+#		rhoWidth = ptc.parameter(.16 + .1 + .1, "rhoWidth")
+
+#		rhoPMass  = ptc.parameter(1.4, "rhoMass")
+#		rhoPWidth = ptc.parameter(0.2, "rhoWidth")
 
 
 #		f0Mass   = ptc.parameter(1.4 , "f0Mass"  )
@@ -193,21 +202,23 @@ def main(rhoFileName = ""):
 
 
 		f0Mass.lock   = True; f0Width.lock  = True; rhoMass.lock  = True; rhoWidth.lock = True
-		rhoPMass.lock = True; rhoPWidth.lock = True
+#		rhoPMass.lock = True; rhoPWidth.lock = True
 
 
 		f0  = ptc.breitWigner([f0Mass, f0Width])
 
 
 		rho  = ptc.breitWigner([rhoMass, rhoWidth])
-		rhoP = ptc.breitWigner([rhoPMass, rhoPWidth])
+#		rhoP = ptc.breitWigner([rhoPMass, rhoPWidth])
 #		f2 = pc.breitWigner()
 #		f2.setParameters([1.27, .2 ])
 #		waveModel = {"Dp[pi,pi]0++PiS" : [f0], "Dp[pi,pi]1--PiP" : [rho], "Dp[pi,pi]2++PiD" : [f2]}
 		waveModel = {"Dp[pi,pi]0++PiS" : [f0], "Dp[pi,pi]1--PiP" : [rho]}
+#		waveModel = {"Dp[pi,pi]0++PiS" : [f0]}
+#		waveModel = {"Dp[pi,pi]1--PiP" : [rho]}
 
 	elif modelMode == "fixedShapes":
-		useBF       = True
+		useBF       = False
 		merge0pp    = False
 		polyDegree  = 0
 		polyComplex = True
@@ -267,24 +278,28 @@ def main(rhoFileName = ""):
 		for sector in sectors:
 			realHistName = sector+"_"+str(tBin)+"_real"
 			histReal = inFile.Get(realHistName)
+			histReal.SetDirectory(0)
 			if not histReal:
 				raise IOError("Could not get '" + realHistName + "' from '" + inFileName + "'")
 			histListReal.append(histReal)
 
 			imagHistName = sector+"_"+str(tBin)+"_imag"
 			histImag = inFile.Get(imagHistName)
+			histImag.SetDirectory(0)
 			if not histImag:
 				raise IOError("Could not get '" + imagHistName + "' from '" + inFileName + "'")
 			histListImag.append(histImag)
 
 			normHistName = sector+"_"+str(tBin)+"_norm"
 			histNorm = inFile.Get(normHistName)
+			histNorm.SetDirectory(0)
 			if not histNorm:
 				raise IOError("Could not get '" + normHistName + "' from '" + inFileName + "'")
 			histListNorm.append(histNorm)
 
 			indexHistName = sector+"_"+str(tBin)+"_index"
 			histIndx = inFile.Get(indexHistName)
+			histIndx.SetDirectory(0)
 			if not histIndx:
 				raise IOError("Could not get '" + indexHistName + "' from '" + inFileName + "'")
 			histListIndx.append(histIndx)
@@ -295,7 +310,7 @@ def main(rhoFileName = ""):
 		for mBin in range(startBin, stopBin):
 			comaHistName = "COMA_"+str(tBin)+"_"+str(mBin)
 			comaHist = inFile.Get(comaHistName)
-
+			comaHist.SetDirectory(0)
 			if produceTotals:
 				realHistName = "INTEGRAL_r_"+str(tBin)+"_"+str(mBin)
 				realHist = inFile.Get(realHistName)
@@ -304,6 +319,7 @@ def main(rhoFileName = ""):
 				intHistsReal.append(realHist)
 				imagHistName = "INTEGRAL_i_"+str(tBin)+"_"+str(mBin)
 				imagHist = inFile.Get(imagHistName)
+				imagHist.SetDirectory(0)
 				if not imagHist:
 					raise IOError("Could not get '" + imagHistName + "' from '" + inFileName + "'")
 				intHistsImag.append(imagHist)
@@ -314,26 +330,31 @@ def main(rhoFileName = ""):
 
 		if not referenceWave == "":
 			refHistReal  = inFile.Get(referenceWave+"_"+str(tBin)+"_real")
+			refHistReal.SetDirectory(0)
 			if not refHistReal:
 				raise IOError("Could not get '" + referenceWave+"_"+str(tBin)+"_real" + "' from '" + self.inFileName + "'")
 			refHistImag  = inFile.Get(referenceWave+"_"+str(tBin)+"_imag")
+			refHistImag.SetDirectory(0)
 			if not refHistImag:
 				raise IOError("Could not get '" + referenceWave+"_"+str(tBin)+"_imag" + "' from '" + self.inFileName + "'")
 			refHistIndex = inFile.Get(referenceWave+"_"+str(tBin)+"_index")
+			refHistIndex.SetDirectory(0)
 			if not refHistIndex:
 				raise IOError("Could not get '" + referenceWave+"_"+str(tBin)+"_index" + "' from '" + self.inFileName + "'")
 			changeReferenceWave(histListReal, histListImag, histListIndx, comaHists, refHistReal, refHistImag, refHistIndex, startBin, stopBin)
 
 		ab = allBins(startBin, stopBin, histListReal, histListImag, histListNorm, histListIndx, comaHists, intHistsReal, intHistsImag)
+	with root_open(zeroFileName, "READ") as inFile:
 		zeroCount = 0
 		zeroHistList  = []
 		eigenHistList = []
 		while True:
 			zeroName  = "zero"+str(zeroCount)+"_"+str(tBin)
 			eigenName = "eigen"+str(zeroCount)+"_"+str(tBin)
-			zeroHist = inFile.Get(zeroName)
+			zeroHist  = inFile.Get(zeroName)
 			if not zeroHist:
 				break
+			zeroHist.SetDirectory(0)
 			print "Adding zero-mode" 
 			zeroCount += 1
 			if not zeroForSectors(sectors, zeroHist.GetTitle()):
@@ -341,6 +362,7 @@ def main(rhoFileName = ""):
 			zeroHistList.append(zeroHist)
 
 			eigenHist = inFile.Get(eigenName)
+			eigenHist.SetDirectory(0)
 			if eigenHist:
 				eigenHistList.append(eigenHist)
 		if (not len(eigenHistList) == 0) and (not len(eigenHistList) == len(zeroHistList)):
@@ -350,7 +372,7 @@ def main(rhoFileName = ""):
 			borders = getZeroHistBorders(zeroHist) 
 			ab.addZeroMode(borders, zeroHist)
 
-		rotateToFourPPampls = True
+		rotateToFourPPampls = False
 		if rotateToFourPPampls:
 			fourPPampls = loadAmplsTM(fourPPamplFileName)
 			ab.removePhases(fourPPampls[tBin][startBin:stopBin])
@@ -366,10 +388,10 @@ def main(rhoFileName = ""):
 				mb.setZeroTheory()
 			from random import random
 			ab.initChi2(waveModel)
-			nBin = startBin
-			leBin = ab.massBins[nBin - startBin]
+			nBin   = startBin
+			leBin  = ab.massBins[nBin - startBin]
 			nTries = 10
-			mnn = float("inf")
+			mnn    = float("inf")
 #			for tr in range(nTries):
 #				print "at",tr,'/',nTries
 #				pars  = [random() for _ in range(leBin.nParAll())]
@@ -403,8 +425,8 @@ def main(rhoFileName = ""):
 				return specialBin.chi2([])
 			res = scipy.optimize.minimize(specialBin.chi2, pars)
 			hi = res.hess_inv
-			print "m0 = ",res.x[0],"+-",hi[0,0]**.5
-			print "G0 = ",res.x[1],"+-",hi[1,1]**.5
+			print "m0 = ",res.x[0],"+-",(2*hi[0,0])**.5
+			print "G0 = ",res.x[1],"+-",(2*hi[1,1])**.5
 			print "Giving a Chi2 of:",res.fun
 
 			sys.exit(0)
@@ -533,9 +555,10 @@ def main(rhoFileName = ""):
 
 #		print paramsZ
 #		paramsZ = np.asarray([ 329.73899894 , 150.29589973]) # For the wrong parameterizations in the D decay
-#		paramsZ = np.asarray([ -49.77267381,    2.93486152]) # For the P-only for in 0-+0+ at bin 25
-#		ab.removeGlobalPhaseFromComa()
+		paramsZ = np.asarray([ -49.77267381,    2.93486152]) # For the P-only for in 0-+0+ at bin 25
+
 		ab.removeZeroModeFromComa()
+		ab.removeGlobalPhaseFromComa()
 
 		if produceTotals:
 			hists = []
@@ -567,6 +590,7 @@ def main(rhoFileName = ""):
         	        ab.fillHistograms(zeroP, phasesT,  mode = PHASETHEO )
 
 
+
 		for i in range(len(histListReal)):
 			renormToBinWidth(intenses[i]  )
 			renormToBinWidth(intensD[i]   )
@@ -593,15 +617,16 @@ def main(rhoFileName = ""):
 				rv = resultViewer([intenses[i], intensD[i], intensT[i]],[reals[i], realsD[i], realsT[i]],[imags[i], imagsD[i], imagsT[i]], [phases[i], phasesD[i], phasesT[i]], startBin = startBin, reImCorrel = ric, noRun = noRun)
 			else:
 				rv = resultViewer([intenses[i], intensD[i]],[reals[i], realsD[i]],[imags[i], imagsD[i]],[phases[i], phasesD[i]], startBin = startBin, reImCorrel = ric, noRun = noRun)
-			rv.titleRight = getProperWaveName(sectors[i])
-#			rv.titleRight = r"$0^{-+}0^+[\pi\pi]_{1^{--}}\pi P$"
-#			rv.tString    = ""
-			rv.tString    = getProperDataSet(inFileName, tBin)
-#			rv.tString    = "Monte Carlo"
+			rv.titleRight    = getProperWaveName(sectors[i])
+			rv.titleRight    = r"$0^{-+}0^+[\pi\pi]_{\text{S}}\pi$S wave"
+#			rv.tString       = ""
+			rv.tString       = getProperDataSet(inFileName, tBin)
+			rv.tString       = "Monte Carlo"
+			rv.tString       = ""
 			rv.printLiminary = False
-			rv.scaleTo = "maxCorrData"
-#			rv.plotCorr   = False
-#			rv.plotTheo   = False
+			rv.scaleTo       = "maxCorrData"
+#			rv.plotCorr      = False
+#			rv.plotTheo      = False
 			rv.run()
 #			for j in range(startBin, stopBin):
 #				fileName = "./uncorrectedPlots/" + sectors[i] + "_bin" + str(j) + "_tBin"+str(tBin) + ".pdf"

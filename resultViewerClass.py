@@ -16,6 +16,7 @@ import modernplotting.toolkit
 import modernplotting.specialPlots
 
 import LaTeX_strings
+from cmath import phase
 
 def findMinBin(hist):
 	for i in range(0,hist.GetNbinsX()):
@@ -169,19 +170,20 @@ class resultViewer:
 		if not len(self.realHists) ==self. nHists or not len(self.imagHists) == self.nHists or not len(self.phaseHists) == self.nHists:
 			raise ValueError("Size of histograms does not match")
 
-		self.corrColor = modernplotting.colors.colorScheme.blue
+		self.corrColor = modernplotting.colors.colorScheme.green
 		self.theoColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.gray, .2)
 		self.dataColor = modernplotting.colors.colorScheme.red
 #		self.addiColor = modernplotting.colors.colorScheme.gray
-#		self.addiColor = modernplotting.colors.colorScheme.blue
-		self.addiColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, .5)
+		self.addiColor = modernplotting.colors.colorScheme.blue
+#		self.addiColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, .5)
 
 		self.lineArgs = {'marker': None, 'linestyle':'dashed', 'markersize':0, 'linewidth':.4, 'zorder' :0, 'color':'.5'}
 
-		self.plotCorr  = True
-		self.plotTheo  = True
-		self.plotData  = True
-		self.noEllipse = False
+		self.plotCorr   = True
+		self.plotTheo   = True
+		self.plotData   = True
+		self.noEllipse  = False
+		self.makeLegend = False
 
 		self.mMin = 0.27
 		self.mMax = 1.94
@@ -189,6 +191,9 @@ class resultViewer:
 		self.noRun = noRun
 
 		self.connectPoints      = []
+		self.labelPoints        = []
+		self.shiftMap           = {}
+		self.yAxisShift         = 0.
 
 		self.titleRight         = ""
 		self.tString            = ""
@@ -215,7 +220,7 @@ class resultViewer:
 			self.argandCanvas.SetWindowSize(500,500)
 			self.phaseCanvas.SetWindowSize( 500,500)
 
-		self.scale(1000./40.) # Scales to events/GeV
+#s		self.scale(1000./40.) # Scales to events/GeV
 		self.printLiminary   = True
 		self.scaleTo         = "corr"
 		self.topMarginIntens = 1.2
@@ -252,6 +257,10 @@ class resultViewer:
 			argand.SetLineColor(index + 1)
 		else:
 			setAxesRange(argand)
+#		print "========================================================"
+#		for i in range(len(reals)):
+#			print index, i,'a',reals[i]**2 +imags[i]**2,reals[i],imags[i],phase(reals[i]+1.j*imags[i])
+#		print "========================================================"
 		return argand
 
 	def getArgandData(self, nBin, index, getCOMA = False):
@@ -280,11 +289,18 @@ class resultViewer:
 		if index >= self.nHists:
 			raise IndexError("Bin index too large")
 		if mode == INTENS:
+			b = 'i'
 			hist = self.intensHists[index].ProjectionY("_intens_"+str(index), nBin+1, nBin +1)
 		elif mode == PHASE:
+			b = 'p'
 			hist = self.phaseHists[index].ProjectionY("_phase_"+str(index), nBin+1, nBin +1)
 		if index > 0:
 			hist.SetLineColor(index + 1)
+#		print "========================================================"
+#		for i in range(hist.GetNbinsX()):
+#			if not hist.GetBinContent(i+1) == 0.:
+#				print index,i,b, hist.GetBinContent(i+1)
+#		print "========================================================"
 		return hist
 
 	def getMarkerLines(self, nBin):
@@ -299,6 +315,7 @@ class resultViewer:
 		return maxLine, minLine
 
 	def drawBin(self, nBin):
+#		print "|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
 		self.intensCanvas.cd()
 		self.intensCanvas.Clear()
 		maxLine, minLine = self.getMarkerLines(nBin)
@@ -417,7 +434,7 @@ class resultViewer:
 
 		if stdCmd:
 			if not len(stdCmd) == 5:
-				raise IndexError("Wrond number of standard commands")
+				raise IndexError("Wrong number of standard commands")
 		if stdCmd:
 			twoDimPlotName = stdCmd[0]
 		else:
@@ -459,8 +476,29 @@ class resultViewer:
 				else:
 					print "Invalid file name given: '" + slicePlotName + "'"
 
-		style.titleLeft = self.getLaTeXMassString(nBin)
+#		style.titleLeft = self.getLaTeXMassString(nBin)
 
+		handlers = []
+		legends  = []
+		if self.plotCorr:
+			handlers.append(matplotlib.patches.Patch(color = self.corrColor))
+			legends.append(r"Corrected zero mode")
+		if self.plotData:
+			handlers.append(matplotlib.patches.Patch(color = self.dataColor))
+			legends.append(r"Uncorrected zero mode")
+		if self.plotTheo:
+			handlers.append(matplotlib.patches.Patch(color = self.theoColor))
+			legends.append(r"Fixed shape")
+		if len(addFiles) > 0:
+			handlers.append(matplotlib.patches.Patch(color = self.addiColor))
+			legends.append(r"Single methods")
+
+
+
+		pointLabels     = {}
+		for i in self.labelPoints:
+			mass = self.intensHists[0].GetYaxis().GetBinCenter(i+1)
+			pointLabels[i] = "{:1.2f}".format(mass)
 		if slicePlotName == "":
 			print "No name given, skipping the intensity slice"
 		else:
@@ -489,7 +527,7 @@ class resultViewer:
 #				plot.setXlim(self.mMin,self.mMax)
 				plot.setXlim(self.mMin,firstUpperBinBorder)
 				plot.setYlabel(LaTeX_strings.intens)
-				plot.axes.yaxis.offsetText.set_position((-.15,1.))
+#				plot.axes.yaxis.offsetText.set_position((-.15,1.))
 				if self.scaleTo == "corr":
 					plot.setYlim(0.,hists[0].GetMaximum()*self.topMarginIntens)
 				elif self.scaleTo == "maxCorrData":
@@ -498,6 +536,9 @@ class resultViewer:
 					raise RuntimeError("Unknwons scale option '" + self.scaleTo + "'")
 				
 				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
+
+				if self.makeLegend:
+					plot.fig.legend(handlers, legends, fontsize = "x-small",loc =0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=(0.19, 0.16, 0.77, 0.77))	
 
 				plot.finishAndSaveAndClose(pdfOutput)
 		if stdCmd:
@@ -540,14 +581,19 @@ class resultViewer:
 						modernplotting.root.plotTH1D(argands[2], plot, maskValue = 0.,markerDefinitions = {'marker' : None, 'linestyle' : 'solid', 'zorder' : 1, 'color': self.theoColor, 'linewidth' : 1.})
 					if self.plotCorr:
 						modernplotting.root.plotTH1D(argands[0], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'marke': None, 'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 3, 'color':self.corrColor})
-					ranges = setAxesRange(argands[0])
+					ranges   = setAxesRange(argands[0])
 				else:
-					ranges = setAxesRange(self.getArgand(nBin, 0))
+					ranges   = setAxesRange(self.getArgand(nBin, 0))
 					for fn in addFiles:
 						X,EX,Y,EY = parseArgand(fn, skipZero = True)
+						hasAdd = True
 						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 2, 'color':self.addiColor})
 					if self.plotData:
 						X,Y,COMA = self.getArgandData(nBin, 1, getCOMA = False)
+#						print "data"
+#						print X
+#						print Y
+#						print "/data"
 						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 3, 'color':self.dataColor})
 					if self.nHists > 2 and self.plotTheo:
 						X,Y,COMA = self.getArgandData(nBin, 2, getCOMA = False)
@@ -559,11 +605,25 @@ class resultViewer:
 									print "WARNING: Connect point",p,"not possible. Index out of range"
 									continue
 								plot.plot([X[p],XD[p]],[Y[p],YD[p]], markersize = 0., color = 'k', linewidth = 0.1 )
-
 					if self.plotCorr:
 						X,Y,COMA = self.getArgandData(nBin, 0, getCOMA = True)
+#						print "corr"
+#						print X
+#						print Y
+#						print "/corr"
+
 						modernplotting.specialPlots.plotErrorEllipses(plot, X, Y, COMA, markerDefinitions = {'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 1, 'color' : self.corrColor, 'markersize' : 0.})
 						plot.plot(X,Y, **{'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 4, 'color' : self.corrColor})
+						for i in pointLabels:
+							if i < len(X):
+								x = X[i]
+								y = Y[i]
+								if i in self.shiftMap:
+									x += self.shiftMap[i][0]
+									y += self.shiftMap[i][1]
+								plot.axes.text(x,y,pointLabels[i])
+
+
 				if self.scaleTo == "corr":
 					pass
 				elif self.scaleTo == "maxCorrData":
@@ -571,7 +631,8 @@ class resultViewer:
 				else:
 					raise RuntimeError("Unknwons scale option '" + self.scaleTo + "'")
 
-
+				if self.makeLegend:
+					plot.fig.legend(handlers, legends, fontsize = "x-small",loc =0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=(0.19, 0.16, 0.77, 0.77))	
 				plot.setXlabel(LaTeX_strings.real)
 				plot.setYlabel(LaTeX_strings.imag)
 				plot.axes.yaxis.offsetText.set_position((-.15,1.))
@@ -580,6 +641,7 @@ class resultViewer:
 				fakk = .1
 				yRange = (ranges[1][0], ranges[1][1] +  fakk*(ranges[1][1] - ranges[1][0]))
 				plot.setXlim(ranges[0])
+				yRange = (yRange[0] + self.yAxisShift,yRange[1] + self.yAxisShift)
 				plot.setYlim(yRange)
 
 				plot.plot([ranges[0][0],ranges[0][1]],[0.,0.], **self.lineArgs)

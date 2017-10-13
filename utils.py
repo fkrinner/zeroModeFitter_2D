@@ -18,8 +18,12 @@ def getNDp(sector):
 	if not len(ns) == 3:
 		raise IOError("Dit not get exactly 3 values")
 	if "0++" in sector:
+		print "HARDCODE::::: getNdp!!!!!!!!!!!!!!"
+		return 49
 		return ns[0]
 	elif "1--" in sector:
+		print "HARDCODE::::: getNdp!!!!!!!!!!!!!!"
+		return 43
 		return ns[1]
 	elif "2++" in sector:
 		return ns[2]
@@ -33,7 +37,7 @@ nRho3 = 56
 
 def zeroForSectors(sectors, title):
 	"""
-	Determines, whether a zero mode cintributes to the sector at hand
+	Determines, whether a zero mode contributes to the sector at hand
 	"""
 	for sector in sectors:
 		if sector in title:

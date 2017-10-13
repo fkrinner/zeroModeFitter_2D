@@ -224,7 +224,32 @@ class massBin:
 		couplings = -np.dot(B, la.pinv(np.transpose(A) + A))
 		return np.dot(couplings, np.dot(A,couplings)) + np.dot(B,couplings) + C
 
+	def getFcnCplsABC(self, zeroModePars):
+		a,b,c = self.getOwnTheoryABC()
+		A     = np.zeros((2*self.nFunc, 2*self.nFunc))
+		B     = np.zeros((2*self.nFunc))
+		C     = c
+		for i in range(2*self.nZero):
+			C    += b[i]*zeroModePars[i]
+			for j in range(2*self.nZero):
+				C += zeroModePars[i]*zeroModePars[j]*a[i,j]
+		for i in range(2*self.nFunc):
+			B[i] += b[2*self.nZero+i]
+			for j in range(2*self.nZero):
+				B[i] += (a[2*self.nZero+i,j]+a[j,2*self.nZero+i])*zeroModePars[j]
+			for j in range(2*self.nFunc):
+				A[i,j] += a[2*self.nZero + i, 2*self.nZero+j]
+		return A,B,C
 
+	def getFcnCplsHess(self, zeroModePars):
+		A,B,C = self.getFcnCplsABC(zeroModePars)
+		return np.transpose(A) + A
+		
+
+	def getFcnCpls(self, zeroModePars):
+		A,B,C = self.getFcnCplsABC(zeroModePars)
+		couplings = -np.dot(B, la.pinv(np.transpose(A) + A))
+		return couplings
 
 	def getNonShapeUncertainties(self, pars = []):
 		"""
@@ -664,6 +689,8 @@ class massBin:
 		"""
 		NDF = 0
 		for s in range(self.nSect):
+			if not s in self.funcs:
+				continue
 			for i,b in enumerate(range(self.borders[s],self.borders[s+1])):
 				if self.hasMassRange:
 					if s in self.massRanges:

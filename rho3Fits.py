@@ -33,9 +33,10 @@ mRho3 = 1.6888
 Grho3 = 0.161
 
 def doFitRho3(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}):
-	rho3Mass  = ptc.parameter( mRho3, "rhoMass" )
-	rho3Width = ptc.parameter( Grho3, "rhoWidth")
-	rho3 = ptc.relativisticBreitWigner([rho3Mass,rho3Width], mPi, mPi, mPi, 3, 0, False)
+	rho3Mass  = ptc.parameter( mRho3, "rho3Mass" )
+	rho3Width = ptc.parameter( Grho3, "rho3Width")
+	rho3   = ptc.relativisticBreitWigner([rho3Mass,rho3Width], mPi, mPi, mPi, 3, 0, False)
+	rho3BF = ptc.timesBF(rho3)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"3++0+[pi,pi]3--PiS":[rho3]}, startBin, stopBin, tBins, sectorRangeMap =  {"3++0+[pi,pi]3--PiS":(1.4,2.0)}, zeroFileName = zeroFileName)
 	fitRho.loadData(referenceWave = "4-+0+rhoPiF")
 	fitRho.finishModelSetup()
@@ -76,6 +77,9 @@ def main():
 	print "Starting with fitting rho3"
 	fitRho3 = doFitRho3(inFileName,zeroFileName, sectors, startBin, stopBin, tBins)
 	print "Finished with fitting rho3"
+
+	return
+
 	s = 0 # only one sector??
 	rv = fitRho3.produceResultViewer(fitRho3.getZeroModeParametersForMode(),s, noRun = True, plotTheory = True)
 	for b in range(startBin, stopBin):

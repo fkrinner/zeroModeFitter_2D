@@ -14,7 +14,19 @@ def loadAmplitudeFile(ampFileName):
 			imags.append(float(chunks[2]))
 	return np.asarray(masses), np.asarray(reals), np.asarray(imags)
 
-class breitWigner:
+class parameterization:
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+		self._parameters = params
+
+	def getParameters(self):
+		return self._parameters
+
+	def returnParameters(self):
+		return self.parameters
+
+class breitWigner(parameterization):
 	def __init__(self):
 		self.nPar       = 2
 		self._parNames   = ["mass", "width"]
@@ -31,13 +43,6 @@ class breitWigner:
 		for i, m in enumerate(ms):
 			retVals[i] = num/(den - m**2)
 		return retVals
-
-	def setParameters(self, params):
-		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
-		self._parameters = params
-	def getParameters(self):
-		return self._parameters
 
 
 OMNES_LOADED = False
@@ -61,7 +66,7 @@ def lookupOmnes(s):
 			x = (s - S_OMNES[i])/(S_OMNES[i+1] - S_OMNES[i])
 			return (R_OMNES[i] + 1.j * I_OMNES[i])*(1-x) + (R_OMNES[i+1] + 1.j * I_OMNES[i+1])*x
 
-class omnesFunctionPolynomial:
+class omnesFunctionPolynomial(parameterization):
 	"""
 	Omnes polynomial allows to set parameters to real. For complex coefficients it it more efficient to use monomials
 	"""
@@ -102,17 +107,7 @@ class omnesFunctionPolynomial:
 			retVals[i] = poly * lookupOmnes(s)
 		return retVals
 
-	def setParameters(self, params):
-		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
-		self._parameters = params
-
-	def getParameters(self):
-		return self._parameters
-
-
-
-class omnesFunctionMonomial:
+class omnesFunctionMonomial(parameterization):
 	"""
 	Several omnes monomiala can use the intrinsic linearity in the parameters and avoid fitting (Real coefficients, whoever are not possible)
 	"""
@@ -132,18 +127,8 @@ class omnesFunctionMonomial:
 			retVals[i] =  m**(2*self.degree) * lookupOmnes(m**2)
 		return retVals
 
-	def setParameters(self, params):
-		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
-		self._parameters = params
 
-	def getParameters(self):
-		return self._parameters
-
-
-
-
-class rpwaBreitWigner:
+class rpwaBreitWigner(parameterization):
 	"""
 	Breit-Wigner as defined in rootPwa (But rebuilt with own code in python 
 	to have full control
@@ -209,16 +194,7 @@ class rpwaBreitWigner:
 				retVals[i] *= compensationFactor
 		return retVals
 
-	def setParameters(self, params):
-		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
-		self._parameters = params
-	
-	def getParameters(self):
-		return self._parameters
-
-
-class rpwaBreitWignerInt:
+class rpwaBreitWignerInt(parameterization):
 	"""
 	Breit-Wigner as defined in rootPwa integrated over the bin
 	"""
@@ -283,17 +259,7 @@ class rpwaBreitWignerInt:
 			retVals[i] = ampl/totalWeight
 		return retVals
 
-	def setParameters(self, params):
-		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
-		self._parameters = params
-
-	def getParameters(self):
-		return self._parameters
-
-
-
-class m3PiHalf:
+class m3PiHalf(parameterization):
 	"""
 	Function to test the external kinematic variables, setting everything below m3Pi/2 to 1., above to 0.
 	"""
@@ -315,16 +281,7 @@ class m3PiHalf:
 				retVals[i] = 1.
 		return retVals
 
-	def setParameters(self, params):
-		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
-		self._parameters = params
-
-	def getParameters(self):
-		return self._parameters
-
-		
-class fixedParameterization:
+class fixedParameterization(parameterization):
 	"""
 	Fixed parameterization parsed from a text file, with mass real imag in each line
 	"""
@@ -377,13 +334,18 @@ class fixedParameterization:
 			retVals[i] =  polynom * self.lookupValue(m)
 		return retVals
 
-	def setParameters(self, params):
+	def setParametersAndErrors(self, params, errors):
+		"""
+		Only a dummy for zero-parameter versions
+		"""
+		if not self.nPar == 0:
+			raise ValueError("Works only for zero-parameters versions")
+		if not len(params) == len(errors):
+			raise IndexError("param/error size mismatch")
 		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
-		self._parameters = params
-
-	def getParameters(self):
-		return self._parameters
+			raise IndexError("param/nPar")
+		self.setParameters(params)
+		return True
 
 
 def main():

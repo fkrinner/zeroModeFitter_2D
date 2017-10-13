@@ -15,9 +15,6 @@ from resultViewerClass import resultViewer
 from utils import loadAmplsTM, changeReferenceWave
 from estimateErrors import estimateErrors,estimateErrors2,estimateErrors3
 
-
-			
-
 class amplitudeAnalysis:
 	"""
 	Class holding all information to fix zero mode coefficients in several ways
@@ -68,12 +65,14 @@ class amplitudeAnalysis:
 		errs      = []
 		startErrs = []
 		pars = res.x[:]
+		print "final chi2 =",res.fun,"x =",res.x
 		for i in range(len(res.x)):
 #			print hi[i,i],"::::::::::::::::::::{{}"
 			errs.append((2.*hi[i,i])**.5)
 		errs = estimateErrors2(self.model.chi2, pars, errs)
-		return res.x, errs
+		NDF  = self.model.getFixedZMndf()
 
+		return res.x, errs, res.fun, NDF
 
 	def setZeroModeParameters(self,params):
 		self.model.setZeroModeParameters(params)
@@ -187,6 +186,9 @@ class amplitudeAnalysis:
 			self.SET('loaded')
 
 	def writeZeroModeCoefficients(self, fileName, coeffs, tIn):
+		"""
+		Writes zero mode coefficients to a file
+		"""
 		if not len(self.model) == len(coeffs):
 			raise ValueError("Dimension mismatch on t level")
 		for t,tBin in enumerate(self.model):
@@ -197,6 +199,9 @@ class amplitudeAnalysis:
 			tBin.writeZeroModeCoefficients(ccc, fileName, str(tIn))
 
 	def getTotalHists(self, params, binRange = {}):
+		"""
+		Creates and fills hisotrgams for totals
+		"""
 		hists = []
 		for t, tBin in enumerate(self.model):
 			tLine = []
@@ -206,8 +211,10 @@ class amplitudeAnalysis:
 		self.fillTotal(params, hists, binRange = binRange)
 		return hists
 
-
 	def fillTotal(self, params, hists, binRange = {}):
+		"""
+		Fills histograms for totals
+		"""
 		for t,tBin in enumerate(self.model):
 			linPar = []
 			for m in params[t]:
@@ -228,6 +235,11 @@ class amplitudeAnalysis:
 		return retVal
 
 	def setZeroModeSignature(self, signature, position):
+		"""
+		Sets an artificial external zero mode signature, used in 
+		"reduceArtificialSignatureToOwn(self, zeroModeParams)" and
+		"createArtificialSignature(self, zeroModeParams)"
+		"""
 		ownSig = self.getZeroModeSignature()
 		if not len(ownSig) == len(signature):
 			raise ValueError("Dimension mismatch at t' level")
@@ -242,6 +254,11 @@ class amplitudeAnalysis:
 		self.additionalPosition = position
 
 	def reduceArtificialSignatureToOwn(self, zeroModeParams):
+		"""
+		Does the opposit of "createArtificialSignature(self, zeroModeParams)"
+		To be used, if the signature of external zero modes has to be reduced to the 
+		own.
+		"""
 		if not self.IS("artificial_signature"):
 			return zeroModeParams
 		ownSig = self.getZeroModeSignature()
@@ -268,6 +285,12 @@ class amplitudeAnalysis:
 		return retVal
 
 	def createArtificialSignature(self, zeroModeParams):
+		"""
+		Returns the zero mode parameters in an artificial signature
+		(Necessary, if for the chosen subset of  sectors, only a subset 
+		of all zero modes survives, but the resulting parameters should 
+		be used later on for the full set)
+		"""
 		if not self.IS("artificial_signature"):
 			return zeroModeParams
 		ownSig = self.getZeroModeSignature()
@@ -294,7 +317,6 @@ class amplitudeAnalysis:
 					tLine.append(mLine)
 			retVal.append(tLine)
 		return retVal
-
 
 	def finishModelSetup(self):
 		"""
@@ -353,7 +375,7 @@ class amplitudeAnalysis:
 		for k in self.waveModel:
 			for f in self.waveModel[k]:
 				totalPars       += f.getParameters()
-				classParameters += f.parameters
+				classParameters += f.returnParameters()
 		if not len(totalPars) == 0:
 #			print "totalPars", totalPars			
 
@@ -385,18 +407,15 @@ class amplitudeAnalysis:
 				pars[i] += errs[i]
 			print "-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-"
 
-			
-			if res.x[0] < 1.05:
-				print "Compare with rho parameters"
-				print "sigM =", (abs(res.x[0]-0.7690)/errs[0])
-				print "sigG =", (abs(res.x[1]-0.1509)/errs[1])
-			else:
-				print "Compare with f2 parameters"
-				print "sigM =", (abs(res.x[0]-1.2751)/errs[0])
-				print "sigG =", (abs(res.x[1]-0.1851)/errs[1])
-
-
-			       
+			if len(res.x) > 1:			
+				if res.x[0] < 1.05:
+					print "Compare with rho parameters"
+					print "sigM =", (abs(res.x[0]-0.7690)/errs[0])
+					print "sigG =", (abs(res.x[1]-0.1509)/errs[1])
+				else:
+					print "Compare with f2 parameters"
+					print "sigM =", (abs(res.x[0]-1.2751)/errs[0])
+					print "sigG =", (abs(res.x[1]-0.1851)/errs[1])
 
 #			estedErrs = estimateErrors(self.model.chi2, res.x, startErrs)
 #			print "---------------------------------------"
@@ -418,6 +437,21 @@ class amplitudeAnalysis:
 			self.fitParameters = []
 			self.chi2 = self.model.chi2(self.fitParameters)
 
+	def setShapeParameters(self, shapePars, errs = [], zeroModeParameters = None):
+		"""
+		Sets the shape parameters of the theory functions
+		"""
+		if len(errs) == 0.:
+			errs = [0.]*len(shapePars)
+		self.fitParameters = shapePars[:]
+		if not self.model[0].setParametersAndErrors(shapePars, errs):
+			raise RuntimeError("Could not setParametersAndErrors()")
+		if not zeroModeParameters:
+			self.calculateNonShapeParameters()
+		else:
+			self.calculateNonShapeParametersForZeroModeParameters(zeroModeParameters)
+		self.SET('hasFitResult')
+
 	def calculateNonShapeParameters(self):
 		"""
 		Calculates the non-shape parameters---i.e. the zero-mode and model coefficients---in the AMPL mode
@@ -428,6 +462,26 @@ class amplitudeAnalysis:
 		for tBin in self.model:
 			chi2, params = tBin.chi2(returnParameters = True)
 			self.nonShapeParameters.append(params)
+		self.SET('hasNonShape')
+
+	def calculateNonShapeParametersForZeroModeParameters(self, zeroModeParameters):
+		"""
+		Calculates the nonSapeParameters (i.e. the function couplings for the theory model) for a ginven set of zero mode parameters
+		"""
+		if not self.IS('hasFitResult'):
+			raise RuntimeError("No fit parameters, call 'fitShapeParameters(...)' first")
+		self.nonShapeParameters = []
+		for t, tBin in enumerate(self.model):
+			cplPars = tBin.getFcnCpls(zeroModeParameters[t])
+			tBinPars = []
+			for m in range(len(zeroModeParameters[t])):
+				mBinPars = []
+				for v in zeroModeParameters[t][m]:
+					mBinPars.append(v)
+				for v in cplPars[m]:
+					mBinPars.append(v)
+				tBinPars.append(mBinPars)
+			self.nonShapeParameters.append(tBinPars)
 		self.SET('hasNonShape')
 
 	def removeZeroModeFromComa(self):
@@ -454,6 +508,30 @@ class amplitudeAnalysis:
 				mBinPars.append(oneBinParams)
 			zeroModePars.append(mBinPars)
 		return zeroModePars
+
+	def getCouplingParameters(self):
+		"""
+		Returns the coupling parameters of the theory parameterizations
+		"""
+		if not self.IS("hasNonShape"):
+			raise RuntimeError("No non-shape parameters calculated, call 'calculateNonShapeParameters()' first")
+		cpls  = []
+		hesss = []
+		for t, tBin in enumerate(self.model):
+			mBinPars = []
+			mBinHess = []
+			for m, mBin in enumerate(tBin):
+				params = self.nonShapeParameters[t][m][2*mBin.nZero:]
+				hess   = mBin.getFcnCplsHess(self.nonShapeParameters[t][m][:2*mBin.nZero])
+				oneBinParams = np.zeros((len(params)))
+				for i,p in enumerate(params):
+					oneBinParams[i] = p
+				mBinPars.append(oneBinParams)
+				mBinHess.append(hess)
+			cpls.append(mBinPars)
+			hesss.append(mBinHess)
+		return cpls, hesss
+
 
 	def getSmoothnessZeroModeParameters(self):
 		"""
@@ -699,6 +777,9 @@ class amplitudeAnalysis:
 		return retVal
 
 	def setExternalZMP(self, zmp):
+		"""
+		Sets zero mode parameters to given values
+		"""
 		if not len(zmp) == len(self.model):
 			raise ValueError("Dimension mismatch (tBin level)")
 		for i in range(len(zmp)):
@@ -776,6 +857,9 @@ class amplitudeAnalysis:
 		raise ValueError("Sector '" + sector + "' invalid")
 
 	def getNDFforMode(self):
+		"""
+		Gets the number of degrees of freedom for the given mode
+		"""
 		ndfs  = self.model.getNDF()
 		ndf   = 0
 		nnon  = 0
@@ -994,8 +1078,6 @@ def main():
 	print "smooth in smooth"
 	print sis
 
-
-
 	sys.exit(0)
 
 	aaR = amplitudeAnalysis(inFileName, sectors, {"1++0+[pi,pi]1--PiS":[rho]}, startBin, stopBin, tBins, sectorRangeMap = {'1++0+[pi,pi]1--PiS':(.65,1.)})
@@ -1011,12 +1093,8 @@ def main():
 	chi2rs = aaR.evaluateZeroModeParameters(paramsR)
 	chi2rr = aaR.evaluateZeroModeParameters(params)
 
-
 	print sumUp(chi2s)  ,  sumUp(chi2r)
 	print sumUp(chi2rs) , sumUp(chi2rr)
-
-
-
 
 	count =  0
 	totalChi2 = 0.
