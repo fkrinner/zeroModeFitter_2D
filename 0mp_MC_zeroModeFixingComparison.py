@@ -18,6 +18,8 @@ import modernplotting.toolkit
 import modernplotting.specialPlots as mpsp
 import studyPlotter
 
+from LaTeX_strings import unCorrected_string, weightedAVG_string
+
 def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
@@ -28,8 +30,8 @@ def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {},
 	            2.12 , 2.16, 2.2 , 2.24, 2.28]
 
 
-#	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
-	rho = ptc.integratedRelativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, binning, intensWeight = False, fitPr = False, reweightInverseBW = True)
+	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
+#	rho = ptc.integratedRelativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, binning, intensWeight = False, fitPr = False, reweightInverseBW = True)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"0-+0+[pi,pi]1--PiP":[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
 	fitRho.loadData(referenceWave = referenceWave)
 	fitRho.finishModelSetup()
@@ -37,6 +39,7 @@ def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {},
 	fitRho.calculateNonShapeParameters()
 	fitRho.mode = AMPL
 #	fitRho.removeGlobalPhaseFromComa()
+#	fitRho.removeZeroModeFromComa()
 	return fitRho
 
 def doF0phase(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]0++PiS" : (0.34, 2*mK - .04)}, referenceWave = ""):
@@ -49,7 +52,7 @@ def doF0phase(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"
 	fitPiPiSshape.phaseFit()
 	fitPiPiSshape.mode = PHASE
 #	fitPiPiSshape.removeGlobalPhaseFromComa()
-	fitPiPiSshape.unifyComa()
+#	fitPiPiSshape.unifyComa()
 	return fitPiPiSshape
 
 alphabet = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
@@ -71,6 +74,7 @@ def doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap 
 	fixedShapes.calculateNonShapeParameters()
 	fixedShapes.mode = AMPL
 #	fixedShapes.removeGlobalPhaseFromComa()
+#	fixedShapes.removeZeroModeFromComa()
 	return fixedShapes
 
 def doSmooth(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
@@ -113,7 +117,7 @@ def main():
 	style.titleLeft  = r"Monte-Carlo"
 
 
-	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
+	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC_corrected.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
 	sectors          = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
 	tBins            = [0]
@@ -133,10 +137,10 @@ def main():
 	                      "fitRho2G"        : r"$\text{fit}_\rho^{2\Gamma}$",
 	                      "smooth"          : r"smooth"}
 
-#	print "Starting with fixed shape f0"
-#	fixedShapeF0 = doFixedShapes(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave)
-#	allMethods["fixedShapeF0"] = fixedShapeF0
-#	print "Finished with fixed shape f0"
+	print "Starting with fixed shape f0"
+	fixedShapeF0 = doFixedShapes(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave)
+	allMethods["fixedShapeF0"] = fixedShapeF0
+	print "Finished with fixed shape f0"
 
 	#	print "Starting with fixed shape rho"
 #	fixedShapeRho = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins, referenceWave = referenceWave)
@@ -153,10 +157,10 @@ def main():
 #	allMethods["fixedShapeRho2G"] = fixedShapeRho2G
 #	print "Finished with restricted rho (2 Gammas)"
 
-#	print "Starting with fixed shapes"
-#	fixedShapes = doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
-#	allMethods["fixedShapes"] = fixedShapes
-#	print "Finished with fixed shapes"
+	print "Starting with fixed shapes"
+	fixedShapes = doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
+	allMethods["fixedShapes"] = fixedShapes
+	print "Finished with fixed shapes"
 
 #	print "Starting with phase"
 #	fitPiPiSshape = doF0phase(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave)
@@ -167,8 +171,6 @@ def main():
 	fitRho = doFitRho(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
 	allMethods["fitRho"] = fitRho
 	print "Finished with fitting rho"
-
-	return
 
 #	fitRho.setZeroModeParameters(fixedShapes.getZeroModeParametersForMode())
 #	for i in range(10):
@@ -192,8 +194,6 @@ def main():
 		smooth = doSmooth(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
 		allMethods["smooth"] = smooth
 		print "Finished with smooth"
-
-	return
 
 	ndfs   = {}
 	params = {}
@@ -294,12 +294,14 @@ def main():
 		studyPlotter.makeValuePlot(plot, hist)
 		
 		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(r"$\vec 0$")
-		axolotl.append(r"$\Omega$")
+		axolotl.append(unCorrected_string)
+		axolotl.append(weightedAVG_string)
 		plot.axes.set_xticklabels(axolotl, rotation = 90)
 		plot.setZlim((0.,1.))
 
 		pdfOutput.savefigAndClose()
+
+	return
 
 	with open("studies_0mp.txt",'w') as out:
 		for axl in axolotl:
@@ -335,6 +337,8 @@ def main():
 		rv = allMethods['fixedShapes'].produceResultViewer(resovedWeightedSum,s, noRun = True, plotTheory = True)
 		rv.writeBinToPdf(startBin, stdCmd = ["./comparisonResults/" + sect + "_MC_2D.pdf", "", [], "", []])
 		for b in range(startBin, stopBin):
+			if not b == 32:
+				continue
 			intensNames = [name+".intens" for name in fileNames[sect,b]]
 			argandNames = [name+".argand" for name in fileNames[sect,b]]
 			rv.writeBinToPdf(b, stdCmd = ["", "./comparisonResults/" + sect + "_MC_intens_"+str(b)+".pdf", intensNames,  "./comparisonResults/" + sect + "_MC_argand_"+str(b)+".pdf", argandNames])

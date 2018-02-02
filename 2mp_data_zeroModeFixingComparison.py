@@ -10,7 +10,7 @@ from utils import sumUp, weightedSum, cloneZeros, checkLaTeX
 import sys
 import pyRootPwa
 import numpy as np
-from globalDefinitions import referenceWave, mPi, mK,mRho,Grho,mRhoPrime,GrhoPrime,mF0,g1,g2,mF2,GF2,Pr0
+from globalDefinitions import referenceWave, mPi, mK,mRho,Grho,mRhoPrime,GrhoPrime,mF0,g1,g2,mF2,GF2,Pr0,m1500,G1500, mF2prime, GF2prime
 from rootfabi import root_open
 import LaTeX_strings
 
@@ -22,6 +22,7 @@ import modernplotting.toolkit
 import modernplotting.specialPlots as mpsp
 import studyPlotter
 
+from LaTeX_strings import unCorrected_string, weightedAVG_string
 def doF0Fit(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = "", deg = 0, writeResultToFile = None):
 	fixedAMPD_sub = pc.fixedParameterization("/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/zeroModes/bwAmplitudes_noBF/amp_2mp0pSigmaPiD")
 	f0Mass   = ptc.parameter(mF0,"f0Mass")
@@ -51,6 +52,27 @@ def doF0Fit(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, 
 			resultString +=  "\n"
 			outFile.write(resultString)
 	return fitF0
+
+def doFit1500(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"2-+0+[pi,pi]0++PiD": (1.15, 1.75)}, referenceWave = "", writeResultToFile = None):
+	fixedAMPD_sub = pc.fixedParameterization("/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/zeroModes/bwAmplitudes_noBF/amp_2mp0pSigmaPiD")
+#	fixedAMPD_sub = pc.constant()
+	f0mass  = ptc.parameter( m1500,  "1500mass" )
+	f0width = ptc.parameter( G1500 , "1500width")
+	f0_1500 = ptc.relativisticBreitWigner([f0mass,f0width], mPi, mPi, mPi, 0, 0, False)
+	fit1500 = amplitudeAnalysis(inFileName, sectors, {"2-+0+[pi,pi]0++PiD":[f0_1500, fixedAMPD_sub]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
+	fit1500.loadData(referenceWave = referenceWave)
+	fit1500.finishModelSetup()
+	fit1500.fitShapeParameters()
+	fit1500.calculateNonShapeParameters()
+	fit1500.mode = AMPL
+#	fit1500.removeGlobalPhaseFromComa()
+	if writeResultToFile:
+		with open(writeResultToFile, 'a') as outFile:
+			if len(tBins) > 1:
+				raise ValueError("More than one t' bin not supported")
+			resultString = str(tBins[0])+ " 666. " + str(f0mass.value) + ' ' + str(f0mass.error) + ' ' + str(f0width.value) + ' ' + str(f0width.error) + "\n"
+			outFile.write(resultString)
+	return fit1500
 
 def doFitRhoP(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = "", writeResultToFile = None):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
@@ -128,6 +150,52 @@ def doFitF2(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, 
 			resultString = str(tBins[0])+ " 666. " + str(f2Mass.value) + ' ' + str(f2Mass.error) + ' ' + str(f2Width.value) + ' ' + str(f2Width.error) + "\n"
 			outFile.write(resultString)
 	return fitF2
+
+f2PrimeFit        = None # Ugly but convenient
+def fitF2prime(fitBin, outFileName, inFileName, startBin, stopBin, tBins, pars, zeroModeParameters, plotNameBase = "", referenceWave = ""):
+	global f2PrimeFit
+	if not f2PrimeFit:
+		f2Mass  = ptc.parameter( pars[0],  "f2Mass")
+		f2Width = ptc.parameter( pars[1], "f2Width")
+		f2Mass.lock  = True
+		f2Width.lock = True
+		f2 = ptc.relativisticBreitWigner([f2Mass,f2Width], mPi, mPi, mPi, 2, 0, False)
+		primeMass   = ptc.parameter( mF2prime, "primeMass" )
+		primeWidth  = ptc.parameter( GF2prime, "primeWidth")
+		prime       = ptc.relativisticBreitWigner([primeMass,primeWidth], mPi, mPi, mPi, 2, 0, False)
+		f2PrimeFit = amplitudeAnalysis(inFileName, ["2-+0+[pi,pi]2++PiS"], {"2-+0+[pi,pi]2++PiS":[f2,prime]}, startBin, stopBin, tBins)
+		f2PrimeFit.loadData(referenceWave = referenceWave)
+		f2PrimeFit.finishModelSetup()
+		f2PrimeFit.fitShapeParameters()
+		f2PrimeFit.calculateNonShapeParameters()
+		f2PrimeFit.mode = AMPL
+	binIndex = fitBin+startBin
+	with open(outFileName, 'a') as outFile:
+		outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
+		startValueOffset = 0.01
+		exceptCount      = 0
+		while True:
+#			try:
+			if True:
+				x,err,c2,ndf = f2PrimeFit.fitShapeParametersForBinRange([mF2prime+startValueOffset,GF2prime+startValueOffset], [0],[fitBin], zeroModeParameters = zeroModeParameters)
+				break
+#			except:
+#				print "Fitter exception encountered"
+#				startValueOffset += 0.001
+#				exceptCount      += 1
+#				if exceptCount > 3:
+#					print "Too many failed attempts in bin "+str(fitBin)+": "+str(exceptCount)
+#					raise Exception
+#					x, err = [0.,0.],[0.,0.]
+#					break
+
+		outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
+		outFile.write(' ' + str(c2/ndf) + '\n')
+		if not plotNameBase == "":
+			f2PrimeFit.calculateNonShapeParameters()
+			f2primeRV = f2PrimeFit.produceResultViewer(zeroModeParameters,"2-+0+[pi,pi]2++PiS", noRun = True, plotTheory = True)
+			f2primeRV.plotData = True
+			f2primeRV.writeBinToPdf(binIndex, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
 
 def doF0phase(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"2-+0+[pi,pi]0++PiD" : (0.34, 2*mK - .04)}, referenceWave = ""):
 	pipiSfileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/zeroModes/bwAmplitudes_noBF/amp_2mp0pSigmaPiD"
@@ -214,13 +282,28 @@ def main():
 
 	inFileName = fileNameMap[study]
 
-	tBins            = [tBin]
+	tBins          = [tBin]
+	rhoRange       = None
+	f2Range        = None
+	sectorRangeMap = {}
 
-	startBin         = 11
+	if not rhoRange:
+		rhoRangeString = ""
+	else:
+		sectorRangeMap["2-+0+[pi,pi]1--PiP"] = (0.,rhoRange)
+		sectorRangeMap["2-+0+[pi,pi]1--PiF"] = (0.,rhoRange)
+		rhoRangeString = "_range"+str(rhoRange)
+	if not f2Range:
+		f2RangeString = ""
+	else:
+		sectorRangeMap["2-+0+[pi,pi]2++PiS"] = (0., f2Range)
+		f2RangeString = "_range"+str(f2Range)
+
+#	startBin         = 11
+#	stopBin          = 50
+
+	startBin         = 25
 	stopBin          = 50
-
-#	startBin         = 30
-#	stopBin          = 41
 
 	methodBinRanges = {
 	                   "fitF2"        : (22, 50),
@@ -242,6 +325,8 @@ def main():
 	                      "fitBothRho"        : r"$\text{fit}_\rho^{2}$",
 	                      "fitF2"             : r"$\text{fit}_{f_2}$",
 	                      "smooth"            : r"smooth"}
+
+	fit1500 = doFit1500(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "2mp_f0_1500_massesAndWidths_global.dat")
 
 	print "Start with fixed shape f0"
 	fixedShapeF0 = doFixedShapes(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave)
@@ -275,7 +360,7 @@ def main():
 	fullSig = fixedShapes.getZeroModeSignature()
 
 #	totalHists = fixedShapes.getTotalHists(cloneZeros(fixedShapes.getZeroModeParametersForMode()))
-#	with root_open("./totals_noCorr_2mp.root", "UPDATE") as out:
+#	with root_open("./totals_2mp_noCorr.root", "UPDATE") as out:
 #		for t in totalHists:
 #			for m in t:
 #				m.Write()
@@ -286,16 +371,16 @@ def main():
 ##	allMethods["pipiS"] = fitPiPiSshape
 ##	print "Finished with phase"
 
-	fitRhoP = doFitRhoP(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "rhoMassesAndWidths_2-+0+1--P_global.dat")
-	fitRhoF = doFitRhoF(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "rhoMassesAndWidths_2-+0+1--F_global.dat")
+	fitRhoP = doFitRhoP(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "rhoMassesAndWidths_2-+0+1--P_global"+rhoRangeString+".dat", sectorRangeMap = sectorRangeMap)
+	fitRhoF = doFitRhoF(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "rhoMassesAndWidths_2-+0+1--F_global"+rhoRangeString+".dat", sectorRangeMap = sectorRangeMap)
 
 	print "Start with fitting bothRho"
-	fitBothRho = doFitBothRho(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "rhoMassesAndWidths_2-+0+1--_global.dat")
+	fitBothRho = doFitBothRho(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "rhoMassesAndWidths_2-+0+1--_global"+rhoRangeString+".dat")
 	allMethods["fitBothRho"] = fitBothRho
 	print "Finished with fitting bothRho"
 
 	print "Start with fitting f2"
-	fitF2 = doFitF2(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
+	fitF2 = doFitF2(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap, referenceWave = referenceWave, writeResultToFile = "f2MassesAndWidths_2-+0+2++_global"+f2RangeString+".dat")
 	allMethods["fitF2"] = fitF2
 	print "Finished with fitting f2"
 
@@ -387,8 +472,8 @@ def main():
 		studyPlotter.makeValuePlot(plot, hist)
 		
 		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(r"$\vec 0$")
-		axolotl.append(r"$\Omega$")
+		axolotl.append(unCorrected_string)
+		axolotl.append(weightedAVG_string)
 		plot.axes.set_xticklabels(axolotl, rotation = 90)
 		plot.setZlim((0.,1.))
 
@@ -424,15 +509,26 @@ def main():
 			rv.writeBinToPdf(b, stdCmd = ["", intensName, [],  argandName, []])
 		return
 
-	doF0Fits   = False
-	doRhoFits  = True
-	doRhoPfits = True
-	doRhoFfits = True
-	doF2Fits   = False
+	doF0Fits      = False
+	doFits1500    = False
+	doRhoFits     = False
+	doRhoPfits    = False
+	doRhoFfits    = False
+	doF2Fits      = True
+	doF2primeFits = False
+
+	if doF2primeFits and not doF2Fits:
+		raise RuntimeError("f2' fits only after f2 fits possible")
+	if doF2primeFits:
+		f2primeFileName = "2mp_f2primeMassesAndWidths_"+str(tBin)+".dat"
+		try:
+			os.remove(f2primeFileName)
+		except:
+			pass
 
 	if doF0Fits:
 		deg = 0
-		f0fit = doF0Fit(inFileName, sectors[:1], startBin, stopBin, tBins, sectorRangeMap = {"2-+0+[pi,pi]0++PiD":(0.9,1.1)}, referenceWave = referenceWave, deg = deg)
+		f0fit = doF0Fit(inFileName, sectors[:1], startBin, stopBin, tBins, sectorRangeMap = {"2-+0+[pi,pi]0++PiD":(0.9,1.1)}, referenceWave = referenceWave, deg = deg, writeResultToFile = "f0MassesAndWidths_2-+0+0++_global.dat")
 		with open("./f0MassesAndWidths_2mp_"+str(tBin)+".dat",'w') as outFile:
 			for i in range(stopBin-startBin):
 				binIndex = i+startBin
@@ -441,9 +537,9 @@ def main():
 				exceptCount      = 0
 				try:
 					startPars = [mF0+startValueOffset,g1+startValueOffset,g2+startValueOffset]
-					for _ in range(deg):
-						startPars.append(startValueOffset)
-						startPars.append(startValueOffset)
+#					for _ in range(deg):
+#						startPars.append(startValueOffset)
+#						startPars.append(startValueOffset)
 					x,err,c2,ndf = f0fit.fitShapeParametersForBinRange(startPars, [0],[i], zeroModeParameters = resolvedWA)
 				except:
 					print "Fitter exception encountered"
@@ -453,13 +549,38 @@ def main():
 						raise Exception("Too many failed attempts: "+str(exceptCount))
 	
 				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1])+ ' ' + str(x[2]) + ' ' + str(err[2]))
-				for i in range(deg):
-					outFile.write( ' ' + str(x[3+i]) + ' ' + str(err[3+i]) + ' ' + str(x[4+i]) + ' ' +str(err[4+i]))
+#				for i in range(deg):
+#					outFile.write( ' ' + str(x[3+i]) + ' ' + str(err[3+i]) + ' ' + str(x[4+i]) + ' ' +str(err[4+i]))
 				outFile.write(' ' + str(c2/ndf)+'\n')
+	if doFits1500:
+		with open("./2mp_f0_1500massesAndWidths_"+str(tBin)+".dat",'w') as outFile:
+			for i in range(stopBin-startBin):
+				binIndex = i + startBin
+				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
+				startValueOffset = 0.00
+				exceptCount      = 0
+				if True:
+					startPars = [m1500+startValueOffset,G1500+startValueOffset]
+#					for _ in range(deg):
+#						startPars.append(startValueOffset)
+#						startPars.append(startValueOffset)
+					x,err,c2,ndf = fit1500.fitShapeParametersForBinRange(startPars, [0],[i], zeroModeParameters = resolvedWA)
+#				except:
+#					print "Fitter exception encountered"
+#					startValueOffset += 0.001
+#					exceptCount      += 1
+#					if exceptCount > 3:
+#						raise Exception("Too many failed attempts: "+str(exceptCount))
+
+				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
+#				for i in range(deg):
+#					outFile.write( ' ' + str(x[3+i]) + ' ' + str(err[3+i]) + ' ' + str(x[4+i]) + ' ' +str(err[4+i]))
+				outFile.write(' ' +str(c2/ndf)+'\n')
+		return
+
 
 	if doRhoFits:
-#		fitRhoPR = doFitRhoPR(inFileName, sectors, startBin, stopBin, tBins)
-		with open("rhoMassesAndWidths_2mp_"+str(tBin)+".dat",'w') as outFile:
+		with open("rhoMassesAndWidths_2mp_"+str(tBin)+rhoRangeString+".dat",'w') as outFile:
 			for i in range(stopBin-startBin):
 				binIndex = i+startBin
 				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
@@ -483,8 +604,7 @@ def main():
 				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
 				outFile.write(' ' + str(c2/ndf)+'\n')
 	if doRhoPfits:
-		fitRhoP = doFitRhoP(inFileName, sectors, startBin, stopBin, tBins)
-		with open("rhoMassesAndWidths_2mpP_"+str(tBin)+".dat",'w') as outFile:
+		with open("rhoMassesAndWidths_2mpP_"+str(tBin)+rhoRangeString+".dat",'w') as outFile:
 			for i in range(stopBin-startBin):
 				binIndex = i+startBin
 				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
@@ -509,8 +629,7 @@ def main():
 				outFile.write(' ' + str(c2/ndf)+'\n')
 
 	if doRhoFfits:
-		fitRhoF = doFitRhoF(inFileName, sectors, startBin, stopBin, tBins)
-		with open("rhoMassesAndWidths_2mpF_"+str(tBin)+".dat",'w') as outFile:
+		with open("rhoMassesAndWidths_2mpF_"+str(tBin)+rhoRangeString+".dat",'w') as outFile:
 			for i in range(stopBin-startBin):
 				binIndex = i+startBin
 				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
@@ -535,7 +654,7 @@ def main():
 				outFile.write(' ' + str(c2/ndf)+'\n')
 
 	if doF2Fits:
-		with open("f2MassesAndWidths_2mp_"+str(tBin)+".dat",'w') as outFile:
+		with open("f2MassesAndWidths_2mp_"+str(tBin)+f2RangeString+".dat",'w') as outFile:
 			for i in range(stopBin-startBin):
 				binIndex = i+startBin
 				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
@@ -558,6 +677,19 @@ def main():
 
 				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
 				outFile.write(' ' + str(c2/ndf)+'\n')
+
+				fitF2.calculateNonShapeParametersForZeroModeParameters(resolvedWA)
+				f2RV = fitF2.produceResultViewer(resolvedWA,"2-+0+[pi,pi]2++PiS", noRun = True, plotTheory = True)
+				f2RV.plotData = True
+				plotNameBase = "./f2FitPlots/2mp0p2ppPiS_<mode>_"+str(binIndex)+"_"+str(tBin)+".pdf"
+				f2RV.writeBinToPdf(binIndex, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
+
+
+				if doF2primeFits:
+					fitF2prime(i,f2primeFileName, inFileName, startBin, stopBin, tBins, [x[0], x[1]], resolvedWA, referenceWave = referenceWave,
+					plotNameBase = "./f2primeFitPlots/"+str(binIndex)+"_"+str(tBin)+"_<mode>.pdf")
+#					)
+
 
 	if doRhoFits or doRhoPfits or doRhoFfits or doF2Fits or doF0Fits:
 		return
@@ -584,8 +716,6 @@ def main():
 		for t in totalHists:
 			for m in t:
 				m.Write()
-#	return
-
 	folder = "./comparisonResultsData"+studyAdder+"/"
 
 	for s, sect in enumerate(allMethods['fixedShapes'].sectors):

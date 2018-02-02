@@ -10,6 +10,7 @@ from utils import sumUp, weightedSum, cloneZeros, checkLaTeX
 import sys
 import pyRootPwa
 import numpy as np
+import numpy.linalg as la
 from globalDefinitions import referenceWave, mPi, mK,mRho,Grho,mRhoPrime,GrhoPrime,mF0,g1,g2,mF2,GF2,Pr0
 from rootfabi import root_open
 import LaTeX_strings
@@ -21,12 +22,13 @@ import modernplotting.toolkit
 import modernplotting.specialPlots as mpsp
 import studyPlotter
 
+from LaTeX_strings import unCorrected_string, weightedAVG_string
 def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = "", writeResultToFile = None):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
 	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"1-+1+[pi,pi]1--PiP":[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
-	fitRho.loadData(referenceWave = referenceWave)
+	fitRho.loadData(loadIntegrals = True, referenceWave = referenceWave)
 	fitRho.finishModelSetup()
 	fitRho.fitShapeParameters()
 	fitRho.calculateNonShapeParameters()
@@ -118,6 +120,8 @@ def main():
 #	methodBinRanges = {} # Override here 
 
 
+	sectorRangeMap = {"1-+1+[pi,pi]1--PiP":(0.,1.2)}
+
 	allMethods       = {}
 	methodStrings    = {}
 	shortlabels      = {  "fixedShapeF0"      : r"$\text{fix}_{f_0}^{~}$",
@@ -142,7 +146,7 @@ def main():
 
 
 	print "Starting with fitting rho"
-	fitRho = doFitRho(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
+	fitRho = doFitRho(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "rhoMassesAndWidths_1-+1+1--_global.dat", sectorRangeMap = sectorRangeMap)
 	allMethods["fitRho"] = fitRho
 	print "Finished with fitting rho"
 
@@ -231,12 +235,12 @@ def main():
 	with modernplotting.toolkit.PdfWriter("studies_1mp_"+str(tBin)+".pdf") as pdfOutput:
 		plot = style.getPlot2D()
 		plot.axes.get_xaxis().set_ticks([(i + 0.5) for i in range(len(studyList)+2)])
-		plot.axes.get_yaxis().set_ticks([(i + 0.5) for i in range(len(studyList))])
+		plot.axes.get_yaxis().set_ticks([(i + 0.5) for i in range(len(studyList)  )])
 		studyPlotter.makeValuePlot(plot, hist)
 		
 		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(r"$\vec 0$")
-		axolotl.append(r"$\Omega$")
+		axolotl.append(unCorrected_string)
+		axolotl.append(weightedAVG_string)
 		plot.axes.set_xticklabels(axolotl, rotation = 90)
 		plot.setZlim((0.,1.))
 
@@ -251,25 +255,56 @@ def main():
 				out.write(str(hist.GetBinContent(i+1, j+1)) + ' ')
 			out.write('\n')
 
-	doRhoFits = False
+	doRhoFits = True
+	writeCpls = True
+	if writeCpls:
+		outFileCpl = open("1mp_rho_cpls_"+str(tBin)+".dat",'w') 
+
+	doActuallyNotFit = True
 	if doRhoFits:
 		with open("rhoMassesAndWidths_exotic_"+str(tBin)+".dat",'w') as out:
 			for i in range(stopBin-startBin):
 				binIndex = i+startBin
 				out.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
 				startValueOffset = 0.00
-				exceptCount      = 0
-				try:
-					x,err,c2,ndf = fitRho.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
-				except:
-					print "Fitter exception encountered"
-					startValueOffset += 0.001
-					exceptCount      += 1	
-					if exceptCount > 3:
-						raise Exception("Too many failed attempts: "+str(exceptCount))
+				if doActuallyNotFit:
+					print "The fit has been turned off, due to a workaround... :("
+				else:
+					exceptCount      = 0
+					try:
+						x,err,c2,ndf = fitRho.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
+					except:
+						print "Fitter exception encountered"
+						startValueOffset += 0.001
+						exceptCount      += 1	
+						if exceptCount > 3:
+							raise Exception("Too many failed attempts: "+str(exceptCount))
 	
-				out.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
-				out.write(' '+str(c2/ndf)+'\n')			
+					out.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
+					out.write(' '+str(c2/ndf)+'\n')
+
+				if writeCpls:
+					fitRho.calculateNonShapeParametersForZeroModeParameters(resolvedWA)
+					cpl, hess = fitRho.getCouplingParameters()
+					hessInv = la.inv(hess[0][i])
+					if not len(cpl[0][1]) == 2:
+						raise IndexError("Parameter count not 2, change implementation")
+					integral = fitRho.model[0][i].getIntegralForFunction(0, fitRho.model[0][i].funcs[0][0])
+					outFileCpl.write(str(0.52 + binIndex*.04) + ' ' + str(cpl[0][i][0]**2 + cpl[0][i][0]**2) + ' ' + str(integral) + ' ')
+					outFileCpl.write(str(cpl[0][i][0])     + ' ' + str(cpl[0][i][1])     + ' ')
+					outFileCpl.write(str(hessInv[0][0]/2) + ' ' + str(hessInv[1][1]/2) + ' ' + str(hessInv[0][1]/2))
+					outFileCpl.write("\n")
+
+				makeRhoFitPlots = False
+				if makeRhoFitPlots:
+					fitRho.calculateNonShapeParametersForZeroModeParameters(resolvedWA)
+					rhoRV = fitRho.produceResultViewer(resolvedWA,"1-+1+[pi,pi]1--PiP", noRun = True, plotTheory = True)
+					rhoRV.plotData = True
+					plotNameBase = "./rhoFitPlots/1mp1p1mmPiP_<mode>_"+str(binIndex)+"_"+str(tBin)+".pdf"
+					rhoRV.writeBinToPdf(binIndex, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
+		if writeCpls:
+			outFileCpl.close()
+
 		return
 ##### Writing starts here
 
@@ -309,30 +344,33 @@ def main():
 		rv = allMethods['fixedShapes'].produceResultViewer(resolvedWA,s, noRun = True, plotTheory = True)
 #		rv.plotData = False
 		rv.writeBinToPdf(startBin, stdCmd = [ folder + sect + "_data_2D_"+str(tBin)+".pdf", "", [], "", []])
-		rv.labelPoints     = [0,10,15,20]
-		rv.makeLegend      = True
+#		rv.labelPoints     = [0,10,15,20]
+#		rv.makeLegend      = True
 		if scalle:
 			rv.scaleTo = "maxCorrData"
-			rv.yAxisShift      = 300.
-			rv.tStringYpos     = 0.8
-			rv.topMarginIntens = 1.4
-			fakkkk             = 1.
+#			rv.yAxisShift      = 300.
+#			rv.tStringYpos     = 0.8
+#			rv.topMarginIntens = 1.4
+#			fakkkk             = 1.
 		else:
 			rv.plotData        = False
-			fakkkk             = .7	
-			rv.tStringYpos     = 0.865
-			rv.topMarginIntens = 1.3
-			rv.yAxisShift      = 100.
-		rv.shiftMap        = {0:(fakkkk*50.,fakkkk*-280.),10:(fakkkk*-420.,fakkkk*-50.), 15:(fakkkk*-420.,fakkkk*-30.), 20:(fakkkk*-50.,fakkkk*70.)}
+#			fakkkk             = .7	
+#			rv.tStringYpos     = 0.865
+#			rv.topMarginIntens = 1.3
+#			rv.yAxisShift      = 100.
+#		rv.shiftMap        = {0:(fakkkk*50.,fakkkk*-280.),10:(fakkkk*-420.,fakkkk*-50.), 15:(fakkkk*-420.,fakkkk*-30.), 20:(fakkkk*-50.,fakkkk*70.)}
 		for b in range(startBin, stopBin):
+#			if not bin == 27:
+#				continue
 			intensNames = [name+".intens" for name in fileNames[sect,b]]
 			argandNames = [name+".argand" for name in fileNames[sect,b]]
 #			intensNames = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/evalDima/dima.intens"]
 #			argandNames = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/evalDima/dima.argand"]
-			if not scalle:
+#			if not scalle:
+			if True:
 				intensNames = []
 				argandNames = []
-	
+#			rv.plotData = True
 			rv.writeBinToPdf(b, stdCmd = ["", folder + sect + "_data_intens_"+str(b)+"_"+str(tBin)+".pdf", intensNames,  folder + sect + "_data_argand_"+str(b)+"_"+str(tBin)+".pdf", argandNames])
 	print studyList
 

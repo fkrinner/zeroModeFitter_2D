@@ -66,6 +66,12 @@ class tBinHolder:
 			retVal.append(tb.getNDF())
 		return retVal
 
+	def removeAllCorrelations(self):
+		"""
+		Removes ALL correlations from the covariance matrix (Simple t' bin loop)
+		"""
+		for tb in self.bins:
+			tb.removeAllCorrelations()
 
 	def modeChi2(self, pars, mode = PHASE, tBinResolved = False, mBinResolved = False):
 		"""

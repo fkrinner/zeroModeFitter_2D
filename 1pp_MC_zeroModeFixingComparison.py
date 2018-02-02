@@ -20,6 +20,7 @@ import studyPlotter
 
 from estimateErrors import estimateErrors2
 
+from LaTeX_strings import unCorrected_string, weightedAVG_string
 import scipy.optimize
 def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
 	rhoMass  = ptc.parameter( mRho , "rhoMass" )
@@ -30,8 +31,8 @@ def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {},
 	            1.6  , 1.64, 1.68, 1.72, 1.76, 1.8 , 1.84, 1.88, 1.92, 1.96, 2.0 , 2.04, 2.08, 
 	            2.12 , 2.16, 2.2 , 2.24, 2.28]
 
-#	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 0, False)
-	rho = ptc.integratedRelativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 0, binning, intensWeight = True, fitPr = False, reweightInverseBW = True)
+	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 0, False)
+#	rho = ptc.integratedRelativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 0, binning, intensWeight = True, fitPr = False, reweightInverseBW = True)
 	fitRho = amplitudeAnalysis(inFileName, sectors, {"1++0+[pi,pi]1--PiS":[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
 	fitRho.loadData(referenceWave = referenceWave)
 	fitRho.finishModelSetup()
@@ -113,7 +114,7 @@ def main():
 	style.titleLeft  = r"Monte-Carlo"
 
 
-	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
+	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC_corrected.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
 	sectors          = ["1++0+[pi,pi]0++PiP", "1++0+[pi,pi]1--PiS"]
 	tBins            = [0]
@@ -325,8 +326,8 @@ def main():
 		
 		plot.axes.set_yticklabels(axolotl)
 #		axolotl.append(r"$\Sigma$")
-		axolotl.append(r"$\vec 0$")
-		axolotl.append(r"$\Omega$")
+		axolotl.append(unCorrected_string)
+		axolotl.append(weightedAVG_string)
 		plot.axes.set_xticklabels(axolotl, rotation = 90)
 		plot.setZlim((0.,1.))
 
@@ -364,12 +365,13 @@ def main():
 		allMethods['fixedShapes'].removeZeroModeFromComa()
 		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
 #		print "Achtung::: cloneZeros() is aktiv"
-		rv = allMethods['fixedShapes'].produceResultViewer(resovedWeightedSum,s, noRun = True, plotTheory = True)
+		rv = allMethods['fixedShapes'].produceResultViewer(cloneZeros(resovedWeightedSum),s, noRun = True, plotTheory = True)
 		rv.writeBinToPdf(startBin, stdCmd = ["./comparisonResults/" + sect + "_MC_2D.pdf", "", [], "", []])
 
 #		continue # remove me
 
 		for b in range(startBin, stopBin):
+			continue
 			intensNames = [name+".intens" for name in fileNames[sect,b]]
 			argandNames = [name+".argand" for name in fileNames[sect,b]]
 			rv.writeBinToPdf(b, stdCmd = ["", "./comparisonResults/" + sect + "_MC_intens_"+str(b)+".pdf", intensNames,  "./comparisonResults/" + sect + "_MC_argand_"+str(b)+".pdf", argandNames])

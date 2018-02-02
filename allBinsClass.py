@@ -22,7 +22,7 @@ class allBins:
 				if not len(intHistsReal) == len(comaHistList) or not len(intHistsImag) == len(comaHistList):
 					raise IndexError("Number of integral histograms does not match")
 				self.massBins.append(massBin(i, realHists, imagHists, normHists, indexHists, comaHistList[count], intHistsReal[count],intHistsImag[count]))
-			count += 1
+			count      += 1
 		self.chi2init       = False
 		self.binsToEvaluate = []
 
@@ -218,6 +218,14 @@ class allBins:
 			addedList.append(val)
 #		print "zero modes taken:",addedList
 		return addedList
+
+
+	def removeAllCorrelations(self):
+		"""
+		Removes ALL correlations from the covariance matrix (Simple mass bin loop)
+		"""
+		for mb in self.massBins:
+			mb.removeAllCorrelations()
 
 	def renormZeroModes(self):
 		"""

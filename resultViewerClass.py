@@ -6,7 +6,7 @@ import plotfabi as pf
 import pyRootPwa
 import numpy as np
 import os, sys
-from modes import INTENS, PHASE
+from modes import INTENS, PHASE, REAL, IMAG
 from parseFiles import parseTH1D, parseTGraph, parseArgand
 os.system(". add_to_front PATH /nfs/mnemosyne/sys/slc6/contrib/texlive/2013/bin/x86_64-linux")
 import modernplotting.root
@@ -14,6 +14,8 @@ import modernplotting.mpplot
 import modernplotting.colors
 import modernplotting.toolkit
 import modernplotting.specialPlots
+
+from rootfabi import root_open
 
 import LaTeX_strings
 from cmath import phase
@@ -154,7 +156,8 @@ def scaleHist(hist, factor):
 			hist.SetBinError(x+1,y+1,hist.GetBinError(x+1,y+1)*factor)
 
 class resultViewer:
-	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 34, startCommand = "", reImCorrel = None, noRun = False):
+	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 34, startCommand = "", reImCorrel = None, noRun = False, showPlots = None):
+		pyRootPwa.ROOT.gStyle.SetOptStat(0)
 		self.nHists       = len(intensHists)
 		if self.nHists < 1:
 			raise ValueError("No histograms given")
@@ -170,12 +173,11 @@ class resultViewer:
 		if not len(self.realHists) ==self. nHists or not len(self.imagHists) == self.nHists or not len(self.phaseHists) == self.nHists:
 			raise ValueError("Size of histograms does not match")
 
-		self.corrColor = modernplotting.colors.colorScheme.green
+		self.corrColor = modernplotting.colors.colorScheme.blue
 		self.theoColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.gray, .2)
 		self.dataColor = modernplotting.colors.colorScheme.red
 #		self.addiColor = modernplotting.colors.colorScheme.gray
-		self.addiColor = modernplotting.colors.colorScheme.blue
-#		self.addiColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.blue, .5)
+		self.addiColor = modernplotting.colors.makeColorLighter(modernplotting.colors.colorScheme.gray, .2)
 
 		self.lineArgs = {'marker': None, 'linestyle':'dashed', 'markersize':0, 'linewidth':.4, 'zorder' :0, 'color':'.5'}
 
@@ -183,17 +185,37 @@ class resultViewer:
 		self.plotTheo   = True
 		self.plotData   = True
 		self.noEllipse  = False
-		self.makeLegend = False
+
 
 		self.mMin = 0.27
 		self.mMax = 1.94
 
+		self.intensLabel = LaTeX_strings.intens
+		self.realLabel   = LaTeX_strings.real
+		self.imagLabel   = LaTeX_strings.imag
+		self.m2PiString  = LaTeX_strings.m2Pi
+
+		self.makeLegend        = False
+		self.legendCorrected   = r"Corrected zero mode"
+		self.legendUncorrected = r"Uncorrected zero mode"
+		self.legendFixed       = r"Fixed shape"
+		self.legendMethods     = r"Single methods"
+
 		self.noRun = noRun
+		if not showPlots:
+			self.showPlots = [True, True, False, False, False]
+		else:
+			if not len(showPlots) == 5:
+				raise IndexError("'showPlots' invalid")
+			self.showPlots = showPlots[:]
 
 		self.connectPoints      = []
 		self.labelPoints        = []
 		self.shiftMap           = {}
 		self.yAxisShift         = 0.
+		self.xticks             = None
+		self.yticks             = None
+
 
 		self.titleRight         = ""
 		self.tString            = ""
@@ -210,20 +232,85 @@ class resultViewer:
 			else:
 				raise "Unknwon command '" + startCommand + "'"
 
-		if not  self.noRun:
-			self.intensCanvas = pyRootPwa.ROOT.TCanvas("Intensity","Intensity")
-			self.sliceCanvas  = pyRootPwa.ROOT.TCanvas("IntensitySlice","IntensitySlice")
-			self.argandCanvas = pyRootPwa.ROOT.TCanvas("Argand"        ,"Argand"        )
-			self.phaseCanvas  = pyRootPwa.ROOT.TCanvas("Phase"        ,"Phase"        )
-			self.intensCanvas.SetWindowSize(500,500)
-			self.sliceCanvas.SetWindowSize( 500,500)
-			self.argandCanvas.SetWindowSize(500,500)
-			self.phaseCanvas.SetWindowSize( 500,500)
+		
+		self.sliceCanvasses = [None,            None,    None,   None,  None  ]
+		self.sliceNames     = ["IntensitySlice","Argand","Phase","Real","Imag"]
+		self.sliceModes     = [ INTENS,          None,    PHASE,  REAL,  IMAG ]
 
-#s		self.scale(1000./40.) # Scales to events/GeV
-		self.printLiminary   = True
+		if not self.noRun:
+			self.intensCanvas = pyRootPwa.ROOT.TCanvas("Intensity","Intensity")
+			self.intensCanvas.SetWindowSize(500,500)
+			self.initSliceCanvasses()
+
+		self.scaleFakk       = 1.
+		self.printLiminary   = False
 		self.scaleTo         = "corr"
 		self.topMarginIntens = 1.2
+
+	def writeToRootFile(self, rootFileName):
+		with root_open(rootFileName, "RECREATE") as outFile:
+			for i,hist in enumerate(self.intensHists):
+				hist.SetName("intens"+str(i))
+				hist.Write()
+			for i,hist in enumerate(self.realHists):
+				hist.SetName("real"+str(i))
+				hist.Write()
+			for i,hist in enumerate(self.imagHists):
+				hist.SetName("imag"+str(i))
+				hist.Write()
+			for i,hist in enumerate(self.phaseHists):
+				hist.SetName("phase"+str(i))
+				hist.Write()
+
+	def replaceFromRootFile(self, rootFileName, index):
+		with root_open(rootFileName, "READ") as inFile:
+			histIntens = inFile.Get("intens"+str(index))
+			if not histIntens:
+				raise IOError("Could not load 'intens"+str(index)+ "'")
+			histIntens.SetDirectory(0)
+			self.intensHists[index] = histIntens
+
+			histReal = inFile.Get("real"+str(index))
+			if not histReal:
+				raise IOError("Could not load 'real"+str(index)+ "'")
+			histReal.SetDirectory(0)
+			self.realHists[index] = histReal
+
+			histImag = inFile.Get("imag"+str(index))
+			if not histImag:
+				raise IOError("Could not load 'imag"+str(index)+ "'")
+			histImag.SetDirectory(0)
+			self.imagHists[index] = histImag
+
+			histPhase = inFile.Get("phase"+str(index))
+			if not histPhase:
+				raise IOError("Could not load 'phase"+str(index)+ "'")
+			histPhase.SetDirectory(0)
+			self.phaseHists[index] = histPhase
+
+	def initSliceCanvasses(self):
+		for i in range(5):
+			if self.showPlots[i]:
+				if not self.sliceCanvasses[i]:
+					self.sliceCanvasses[i]  = pyRootPwa.ROOT.TCanvas(self.sliceNames[i],self.sliceNames[i])
+					self.sliceCanvasses[i].SetWindowSize(500,500)
+			else:
+				if self.sliceCanvasses[i]:
+					self.sliceCanvasses[i].Close()
+					self.sliceCanvasses[i] = None	
+
+	def setShowPlots(self):
+		self.showPlots = []
+		for i in range(5):
+			while True:
+				ans = raw_input("Show "+self.sliceNames[i]+" slice? (y/n)")
+				if ans == "y":
+					self.showPlots.append(True)
+					break
+				if ans == "n":
+					self.showPlots.append(False)
+					break
+		self.initSliceCanvasses()
 
 	def scale(self, factor):
 		for hist in self.intensHists:
@@ -233,6 +320,7 @@ class resultViewer:
 		for hist in self.imagHists:
 			scaleHist(hist, factor**.5)
 		scaleHist(self.reImCorrel, factor)
+		self.scaleFakk = factor
 
 	def getArgand(self, nBin, index = 0):
 		if index >= self.nHists:
@@ -289,11 +377,17 @@ class resultViewer:
 		if index >= self.nHists:
 			raise IndexError("Bin index too large")
 		if mode == INTENS:
+#			b = 'I'
+			hist = self.intensHists[index].ProjectionY("intens_"+str(index), nBin+1, nBin +1)
+		elif mode == REAL:
+			b = 'r'
+			hist = self.realHists[index].ProjectionY("real_"+str(index), nBin+1, nBin +1)
+		elif mode == IMAG:			
 			b = 'i'
-			hist = self.intensHists[index].ProjectionY("_intens_"+str(index), nBin+1, nBin +1)
+			hist = self.imagHists[index].ProjectionY("imag_"+str(index), nBin+1, nBin +1)
 		elif mode == PHASE:
-			b = 'p'
-			hist = self.phaseHists[index].ProjectionY("_phase_"+str(index), nBin+1, nBin +1)
+#			b = 'p'
+			hist = self.phaseHists[index].ProjectionY("phase_"+str(index), nBin+1, nBin +1)
 		if index > 0:
 			hist.SetLineColor(index + 1)
 #		print "========================================================"
@@ -301,6 +395,7 @@ class resultViewer:
 #			if not hist.GetBinContent(i+1) == 0.:
 #				print index,i,b, hist.GetBinContent(i+1)
 #		print "========================================================"
+		hist.SetTitle(hist.GetName())
 		return hist
 
 	def getMarkerLines(self, nBin):
@@ -324,32 +419,25 @@ class resultViewer:
 		minLine.Draw()
 		self.intensCanvas.Update()
 
-		self.sliceCanvas.cd()
-		self.sliceCanvas.Clear()
-		slices = [self.getSlice(nBin)]
-		slices[0].Draw()
-		for i in range(1, self.nHists):
-			slices.append(self.getSlice(nBin, i))
-			slices[-1].Draw("SAME")
-		self.sliceCanvas.Update()
-
-		self.phaseCanvas.cd()
-		self.phaseCanvas.Clear()
-		phases = [self.getSlice(nBin, mode = PHASE)]
-		phases[0].Draw()
-		for i in range(1, self.nHists):
-			slices.append(self.getSlice(nBin, index = i, mode = PHASE))
-			slices[-1].Draw("SAME")
-		self.phaseCanvas.Update()
-
-		self.argandCanvas.cd()
-		self.argandCanvas.Clear()
-		argands = [self.getArgand(nBin)]
-		argands[0].Draw()
-		for i in range(1, self.nHists):
-			argands.append(self.getArgand(nBin, i))
-			argands[-1].Draw("SAME")
-		self.argandCanvas.Update()
+		for i in range(5):
+			if self.showPlots[i] and not i == 1:
+				self.sliceCanvasses[i].cd()
+				self.sliceCanvasses[i].Clear()
+				slices = [self.getSlice(nBin, mode = self.sliceModes[i])]
+				slices[0].Draw()
+				for h in range(1, self.nHists):
+					slices.append(self.getSlice(nBin, h, mode = self.sliceModes[i]))
+					slices[-1].Draw("SAME")
+				self.sliceCanvasses[i].Update()
+			elif i == 1 and self.showPlots[i]:	
+				self.sliceCanvasses[i].cd()
+				self.sliceCanvasses[i].Clear()
+				argands = [self.getArgand(nBin)]
+				argands[0].Draw()
+				for h in range(1, self.nHists):
+					argands.append(self.getArgand(nBin, h))
+					argands[-1].Draw("SAME")
+				self.sliceCanvasses[i].Update()
 
 	def run(self):
 		while True:
@@ -375,10 +463,14 @@ class resultViewer:
 				self.intensHists[0].SetMaximum(self.intensHists[0].GetMaximum()*1.2)
 			elif cmd == 'w':
 				self.writeBinToPdf(self.bin)
+			elif cmd == 'r':
+				self.wiriteReImToPdf(self.bin)
 			elif cmd == 't':
 				self.writeAmplFiles(self.bin)
 			elif cmd == 'e':
 				self.executeCommad()
+			elif cmd == 'l':
+				self.setShowPlots()
 			elif cmd == '*':
 				stdCmd = getStdCmd()
 				self.writeBinToPdf(self.bin, stdCmd)
@@ -429,6 +521,9 @@ class resultViewer:
 		style.errorEllipsesEdgeColor = modernplotting.colors.makeColorLighter(self.corrColor, .5)
 		style.errorEllipsesFaceColor = modernplotting.colors.makeColorLighter(self.corrColor, .5)
 		style.finishPreliminary      = self.printLiminary
+
+#		style.titleLeft = "Uncorrected"
+
 		if not self.titleRight == "":
 			style.titleRight = self.titleRight
 
@@ -441,18 +536,18 @@ class resultViewer:
 			twoDimPlotName = raw_input("Name of the 2D plot:")
 		if twoDimPlotName == "":
 			print "No name given, skipping the 2D plot"
-		elif not twoDimPlotName.endswith(".pdf"):
+		elif not twoDimPlotName.endswith(".pdf") and not twoDimPlotName.endswith(".png"):
 			print "Invalid file name extension in file name: '" + twoDimPlotName + "' skipping 2d plot"
 		else:
 			with modernplotting.toolkit.PdfWriter(twoDimPlotName) as pdfOutput:
 				plot = style.getPlot2D()
 				modernplotting.root.plotTH2D(self.intensHists[0], plot, maskValue = 0.)
-				plot.setZshowColorBar()
-				plot.colorbar.ax.yaxis.offsetText.set_position((4.,1.))
-				plot.colorbar.formatter.set_powerlimits((2, 6))
+#				plot.setZshowColorBar()
+#				plot.colorbar.ax.yaxis.offsetText.set_position((4.,1.))
+#				plot.colorbar.formatter.set_powerlimits((2, 6))
 				plot.setZlim((0., self.intensHists[0].GetMaximum()))
 				plot.setXlabel(LaTeX_strings.m3Pi)
-				plot.setYlabel(LaTeX_strings.m2Pi)
+				plot.setYlabel(self.m2PiString)
 				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
 
 				plot.finishAndSaveAndClose(pdfOutput)
@@ -471,27 +566,28 @@ class resultViewer:
 					else:
 						addFiles.append(fileName)
 						print "Added '" + fileName + "' as additional plot"
-				elif slicePlotName.endswith(".pdf") or slicePlotName == "":
+				elif slicePlotName.endswith(".pdf") or slicePlotName.endswith(".png") or slicePlotName == "":
 					break
 				else:
 					print "Invalid file name given: '" + slicePlotName + "'"
 
-#		style.titleLeft = self.getLaTeXMassString(nBin)
+		style.titleLeft = self.getLaTeXMassString(nBin)
+#		style.titleLeft = r"Monte Carlo"
 
 		handlers = []
 		legends  = []
 		if self.plotCorr:
 			handlers.append(matplotlib.patches.Patch(color = self.corrColor))
-			legends.append(r"Corrected zero mode")
+			legends.append(self.legendCorrected)
 		if self.plotData:
 			handlers.append(matplotlib.patches.Patch(color = self.dataColor))
-			legends.append(r"Uncorrected zero mode")
+			legends.append(self.legendUncorrected)
 		if self.plotTheo:
 			handlers.append(matplotlib.patches.Patch(color = self.theoColor))
-			legends.append(r"Fixed shape")
+			legends.append(self.legendFixed)
 		if len(addFiles) > 0:
 			handlers.append(matplotlib.patches.Patch(color = self.addiColor))
-			legends.append(r"Single methods")
+			legends.append(self.legendMethods)
 
 
 
@@ -515,7 +611,7 @@ class resultViewer:
 				if firstUpperBinBorder == -1.:
 					raise ValueError("Could not determine upper limit")
 				for fn in addFiles:
-					hist = parseTH1D(fn)
+					hist = parseTH1D(fn, self.scaleFakk)
 					modernplotting.root.plotTH1D(hist, plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':0, 'color':self.addiColor})
 				if self.plotData:
 					modernplotting.root.plotTH1D(hists[1], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':1, 'color':self.dataColor})
@@ -523,11 +619,11 @@ class resultViewer:
 					modernplotting.root.plotTH1D(hists[2], plot, markerDefinitions = { 'zorder':2, 'color': self.theoColor})
 				if self.plotCorr:
 					modernplotting.root.plotTH1D(hists[0], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':3, 'color':self.corrColor})
-				plot.setXlabel(LaTeX_strings.m2Pi)
+				plot.setXlabel(self.m2PiString)
 #				plot.setXlim(self.mMin,self.mMax)
 				plot.setXlim(self.mMin,firstUpperBinBorder)
-				plot.setYlabel(LaTeX_strings.intens)
-#				plot.axes.yaxis.offsetText.set_position((-.15,1.))
+				plot.setYlabel(self.intensLabel)
+				plot.axes.yaxis.offsetText.set_position((-.15,1.))
 				if self.scaleTo == "corr":
 					plot.setYlim(0.,hists[0].GetMaximum()*self.topMarginIntens)
 				elif self.scaleTo == "maxCorrData":
@@ -558,7 +654,7 @@ class resultViewer:
 					else:
 						addFiles.append(fileName)
 						print "Added '" + fileName + "' as additional plot"
-				elif argandPlotName.endswith(".pdf") or argandPlotName == "":
+				elif argandPlotName.endswith(".pdf") or argandPlotName.endswith(".png") or argandPlotName == "":
 					break
 				else:
 					print "Invalid file name: '" + argandPlotName + "'"
@@ -572,7 +668,7 @@ class resultViewer:
 					argands   = [self.getArgand(nBin, index) for index in range(self.nHists)]
 					addGraphs = []
 					for fn in addFiles:
-						graph = parseTGraph(fn)
+						graph = parseTGraph(fn, self.scaleFacc**.5)
 						addGraphs.append(graph)
 						modernplotting.root.plotTH1D(graph, plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 0, 'color':self.addiColor})
 					if self.plotData:
@@ -585,7 +681,7 @@ class resultViewer:
 				else:
 					ranges   = setAxesRange(self.getArgand(nBin, 0))
 					for fn in addFiles:
-						X,EX,Y,EY = parseArgand(fn, skipZero = True)
+						X,EX,Y,EY = parseArgand(fn, skipZero = True, fakk = self.scaleFakk**.5)
 						hasAdd = True
 						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 2, 'color':self.addiColor})
 					if self.plotData:
@@ -633,13 +729,21 @@ class resultViewer:
 
 				if self.makeLegend:
 					plot.fig.legend(handlers, legends, fontsize = "x-small",loc =0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=(0.19, 0.16, 0.77, 0.77))	
-				plot.setXlabel(LaTeX_strings.real)
-				plot.setYlabel(LaTeX_strings.imag)
+				plot.setXlabel(self.realLabel)
+				plot.setYlabel(self.imagLabel)
 				plot.axes.yaxis.offsetText.set_position((-.15,1.))
 				plot.axes.xaxis.offsetText.set_position((1.05,0.))
 				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
 				fakk = .1
 				yRange = (ranges[1][0], ranges[1][1] +  fakk*(ranges[1][1] - ranges[1][0]))
+
+				if self.xticks:
+					plot.axes.xaxis.set_ticks(self.xticks)
+
+				if self.yticks:
+					plot.axes.yaxis.set_ticks(self.yticks)
+
+
 				plot.setXlim(ranges[0])
 				yRange = (yRange[0] + self.yAxisShift,yRange[1] + self.yAxisShift)
 				plot.setYlim(yRange)
@@ -648,5 +752,97 @@ class resultViewer:
 				plot.plot([0.,0.],[yRange[0],yRange[1]], **self.lineArgs)
 
 				plot.finishAndSaveAndClose(pdfOutput)
+
+	def wiriteReImToPdf(self, nBin, outFileName = None):
+		style = modernplotting.mpplot.PlotterStyle()
+		style.finishPreliminary = self.printLiminary
+		style.titleLeft = self.getLaTeXMassString(nBin)
+		if not self.titleRight == "":
+			style.titleRight = self.titleRight
+
+		if not outFileName:
+			while True:
+				outFileNameBase = raw_input("OutFileName (must contain <ri>):")
+				if not outFileNameBase.endswith(".pdf"):
+					print "File name must end with '.pdf'"
+					continue
+				if not "<ri>" in outFileNameBase:
+					print "File name must contain '<ri>'"
+					continue
+				break
+		else:
+			outFileNameBase = outFileName
+
+		if outFileNameBase == "":
+			print "No name given, skipping"
+			return False
+		addFiles = []
+
+		handlers = []
+		legends  = []
+		if self.plotCorr:
+			handlers.append(matplotlib.patches.Patch(color = self.corrColor))
+			legends.append(self.legendCorrected)
+		if self.plotData:
+			handlers.append(matplotlib.patches.Patch(color = self.dataColor))
+			legends.append(self.legendUncorrected)
+		if self.plotTheo:
+			handlers.append(matplotlib.patches.Patch(color = self.theoColor))
+			legends.append(self.legendFixed)
+		if len(addFiles) > 0:
+			handlers.append(matplotlib.patches.Patch(color = self.addiColor))
+			legends.append(self.legendMethods)
+
+		for mode in [(REAL,'real'),(IMAG,'imag')]:
+			with modernplotting.toolkit.PdfWriter(outFileNameBase.replace("<ri>",mode[1])) as pdfOutput:
+				plot = style.getPlot1D()
+				hists = [self.getSlice(nBin, index, mode = mode[0]) for index in range(self.nHists)]
+				nnBins = hists[0].GetNbinsX()
+				firstUpperBinBorder = -1.
+				for i in range(nnBins):
+					if not hists[0].GetBinContent(nnBins-i) == 0.:
+						firstUpperBinBorder = hists[0].GetXaxis().GetBinUpEdge(nnBins-i)
+						break
+				if firstUpperBinBorder == -1.:
+					raise ValueError("Could not determine upper limit")
+				for fn in addFiles:
+					hist = parseTH1D(fn)
+					modernplotting.root.plotTH1D(hist, plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':0, 'color':self.addiColor})
+				if self.plotData:
+					modernplotting.root.plotTH1D(hists[1], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':1, 'color':self.dataColor})
+				if len(hists) > 2 and self.plotTheo:
+					modernplotting.root.plotTH1D(hists[2], plot, markerDefinitions = { 'zorder':2, 'color': self.theoColor})
+				if self.plotCorr:
+					modernplotting.root.plotTH1D(hists[0], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':3, 'color':self.corrColor})
+				plot.setXlabel(self.m2PiString)
+#				plot.setXlim(self.mMin,self.mMax)
+				plot.setXlim(self.mMin,firstUpperBinBorder)
+				if mode[0] == REAL:
+					plot.setYlabel(LaTeX_strings.real)
+				elif mode[0] == IMAG:
+					plot.setYlabel(LaTeX_strings.imag)
+				plot.axes.yaxis.offsetText.set_position((-.15,1.))
+				if self.scaleTo == "corr":
+					maxx = hists[0].GetMaximum()
+					minn = hists[0].GetMinimum()
+					rang = maxx - minn
+
+					plot.setYlim(minn,minn + rang*self.topMarginIntens)
+				elif self.scaleTo == "maxCorrData":
+					maxx = max(hists[0].GetMaximum(),hists[1].GetMaximum())
+					minn = min(hists[0].GetMinimum(),hists[1].GetMinimum())
+					rang = maxx - minn
+					plot.setYlim(minn,minn + rang*self.topMarginIntens)
+				else:
+					raise RuntimeError("Unknwons scale option '" + self.scaleTo + "'")
+			
+				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
+
+				if self.makeLegend:
+					plot.fig.legend(handlers, legends, fontsize = "x-small",loc =0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=(0.19, 0.16, 0.77, 0.77))	
+
+				plot.finishAndSaveAndClose(pdfOutput)
+
 		print "Writing to .pdf finished."
+		return True
 

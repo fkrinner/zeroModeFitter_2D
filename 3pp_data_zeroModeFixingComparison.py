@@ -21,6 +21,8 @@ import modernplotting.toolkit
 import modernplotting.specialPlots as mpsp
 import studyPlotter
 
+from LaTeX_strings import unCorrected_string, weightedAVG_string
+
 def doFitRho(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {},referenceWave = "", writeResultToFile = None):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
@@ -145,10 +147,16 @@ def main():
 	if tBin < 0 or tBin > 3:
 		raise ValueError("Invalid t' bin: " + str(tBin))
 
-	tBins            = [tBin]
-
-	startBin         = 11
-	stopBin          = 50
+	tBins          = [tBin]
+	sectorRangeMap = {}
+	rhoRangeAdder  = ''
+	startBin       = 11
+	stopBin        = 50
+	restrictRho    = False
+	if restrictRho:
+		rhoRange       = 1.2
+		sectorRangeMap = {"3++0+[pi,pi]1--PiD":(0.,rhoRange)}
+		rhoRangeAdder  = "_range"+str(rhoRange)
 
 	methodBinRanges = {
 	                   "fitF2"        : (22, 50),
@@ -180,25 +188,25 @@ def main():
 
 
 	print "Starting with fixed shapes"
-	fixedShapes = doFixedShapes(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
+	fixedShapes = doFixedShapes(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, sectorRangeMap = sectorRangeMap)
 	allMethods["fixedShapes"] = fixedShapes
 	print "Finished with fixed shapes"
 	fullSig = fixedShapes.getZeroModeSignature()
 
 
 	print "Starting with fitting rho"
-	fitRho = doFitRho(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
+	fitRho = doFitRho(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "./rhoMassesAndWidths_3pp_global"+rhoRangeAdder+".dat", sectorRangeMap = sectorRangeMap)
 	allMethods["fitRho"] = fitRho
 	print "Finished with fitting rho"
 
 	print "Starting with fitting rho3"
-	fitRho3 = doFitRho3(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
+	fitRho3 = doFitRho3(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "./rho3MassesAndWidths_3pp_global.dat", sectorRangeMap = sectorRangeMap)
 	allMethods["fitRho3"] = fitRho3
 	print "Finished with fitting rho3"
 
 	if stopBin - startBin > 1:
 		print "Starting with smooth"
-		smooth = doSmooth(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
+		smooth = doSmooth(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, sectorRangeMap = sectorRangeMap)
 		allMethods["smooth"] = smooth
 		print "Finished with smooth"
 
@@ -284,8 +292,9 @@ def main():
 		studyPlotter.makeValuePlot(plot, hist)
 		
 		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(r"$\vec 0$")
-		axolotl.append(r"$\Omega$")
+
+		axolotl.append(unCorrected_string)
+		axolotl.append(weightedAVG_string)
 		plot.axes.set_xticklabels(axolotl, rotation = 90)
 		plot.setZlim((0.,1.))
 
@@ -300,13 +309,13 @@ def main():
 				out.write(str(hist.GetBinContent(i+1, j+1)) + ' ')
 			out.write('\n')
 
-	doRhoFits  = True
+	doRhoFits  = False
 	doF2Fits   = False
 	doRho3Fits = True
-	binWiseFit = False
+	binWiseFit = True
 
 	if doRhoFits:
-		with open("rhoMassesAndWidths_3pp_"+str(tBin)+".dat",'w') as out:
+		with open("rhoMassesAndWidths_3pp_"+str(tBin)+rhoRangeAdder+".dat",'w') as out:
 			if binWiseFit:
 				bins = range(stopBin-startBin)
 			else:
@@ -323,7 +332,7 @@ def main():
 						else:
 							fitRange = range(stopBin-startBin)
 
-						x,err,c2,ndf = fitRho.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0],fitRange, zeroModeParameters = resolvedWA)
+						x,err,c2,ndf = fitRho.fitShapeParametersForBinRange([mRho+startValueOffset,Grho+startValueOffset], [0], fitRange, zeroModeParameters = resolvedWA)
 						break
 					except:
 						print "Fitter exception encountered"
@@ -334,14 +343,15 @@ def main():
 #							raise Exception
 							x, err = [0.,0.],[0.,0.]
 							c2, ndf = 0.,1
-				with open("3pp_rho_cpls_"+str(tBin)+".dat",'w') as outFileCpl:
-					fitRho.calculateNonShapeParameters()
-					cpl, hess = fitRho.getCouplingParameters()
-					outFileCpl.write(str(cpl))
-					outFileCpl.write("\n")
-					outFileCpl.write(str(hess))
 				out.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
 				out.write(' '+ str(c2/ndf) +'\n')
+
+			with open("3pp_rho_cpls_"+str(tBin)+".dat",'w') as outFileCpl:
+				fitRho.calculateNonShapeParameters()
+				cpl, hess = fitRho.getCouplingParameters()
+				outFileCpl.write(str(cpl))
+				outFileCpl.write("\n")
+				outFileCpl.write(str(hess))
 
 	if doF2Fits:
 		fitF2 = doFitF2(inFileName,zeroFileName, ["3++0+[pi,pi]2++PiP"], startBin, stopBin, tBins)
@@ -407,6 +417,13 @@ def main():
 							x, err = [0.,0.],[0.,0.]
 							c2, ndf = 0.,1
 							break
+
+				fitRho3.calculateNonShapeParametersForZeroModeParameters(resolvedWA)
+				rhoRV = fitRho3.produceResultViewer(resolvedWA,"3++0+[pi,pi]3--PiS", noRun = True, plotTheory = True)
+				rhoRV.plotData = True
+				plotNameBase = "./rho3FitPlots/3pp0p3mmPiS_<mode>_"+str(binIndex)+"_"+str(tBin)+".pdf"
+				rhoRV.writeBinToPdf(binIndex, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
+
 				with open("3pp_rho3_cpls_"+str(tBin)+".dat",'w') as outFileCpl:
 					fitRho3.calculateNonShapeParameters()
 					cpl, hess = fitRho3.getCouplingParameters()

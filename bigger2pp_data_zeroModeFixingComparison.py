@@ -23,6 +23,7 @@ import modernplotting.toolkit
 import modernplotting.specialPlots as mpsp
 import studyPlotter
 
+from LaTeX_strings import unCorrected_string, weightedAVG_string
 def doFitRho(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
 	rhoMass  = ptc.parameter( mRho, "rhoMass" )
 	rhoWidth = ptc.parameter( Grho , "rhoWidth")
@@ -37,7 +38,7 @@ def doFitRho(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorR
 	return fitRho
 
 
-def doFitF2(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = ""):
+def doFitF2(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = "", writeResultToFile = None):
 	f2Mass  = ptc.parameter( mF2,  "f2Mass" )
 	f2Width = ptc.parameter( GF2 , "f2Width")
 	f2 = ptc.relativisticBreitWigner([f2Mass,f2Width], mPi, mPi, mPi, 2, 1, False)
@@ -48,6 +49,12 @@ def doFitF2(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, sectorRa
 	fitF2.calculateNonShapeParameters()
 	fitF2.mode = AMPL
 #	fitF2.removeGlobalPhaseFromComa()
+	if writeResultToFile:
+		with open(writeResultToFile, 'a') as outFile:
+			if len(tBins) > 1:
+				raise ValueError("More than one t' bin not supported")
+			resultString = str(tBins[0])+ " 666. " + str(f2Mass.value) + ' ' + str(f2Mass.error) + ' ' + str(f2Width.value) + ' ' + str(f2Width.error) + "\n"
+			outFile.write(resultString)
 	return fitF2
 
 
@@ -155,6 +162,12 @@ def main():
 	print "Finished with fixed shapes"
 	fullSig = fixedShapes.getZeroModeSignature()
 
+	totalHists = fixedShapes.getTotalHists(cloneZeros(fixedShapes.getZeroModeParametersForMode()))
+	with root_open("./totals_bigger2pp_noCorr.root", "UPDATE") as outFileRoot:
+		for t in totalHists:
+			for m in t:
+				m.Write()
+	return
 
 	print "Starting with fitting rho"
 	fitRho = doFitRho(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
@@ -162,7 +175,7 @@ def main():
 	print "Finished with fitting rho"
 
 	print "Starting with fitting f2"
-	fitF2 = doFitF2(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave)
+	fitF2 = doFitF2(inFileName,zeroFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "rhoMassesAndWidths_bigger2++1+1++_global.dat")
 	allMethods["fitF2"] = fitF2
 	print "Finished with fitting f2"
 
@@ -254,8 +267,9 @@ def main():
 		studyPlotter.makeValuePlot(plot, hist)
 		
 		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(r"$\vec 0$")
-		axolotl.append(r"$\Omega$")
+
+		axolotl.append(unCorrected_string)
+		axolotl.append(weightedAVG_string)
 		plot.axes.set_xticklabels(axolotl, rotation = 90)
 		plot.setZlim((0.,1.))
 
@@ -269,8 +283,32 @@ def main():
 			for j in range(hist.GetNbinsY()):
 				out.write(str(hist.GetBinContent(i+1, j+1)) + ' ')
 			out.write('\n')
+	doF2Fits = False
+	if doF2Fits:
+		with open("f2MassesAndWidths_bigger2pp_"+str(tBin)+".dat",'w') as outFile:
+			for i in range(stopBin-startBin):
+				binIndex = i+startBin
+				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
+				startValueOffset = 0.01
+				exceptCount      = 0
+				while True:
+					try:
+#					if True:
+						x,err,c2,ndf = fitF2.fitShapeParametersForBinRange([mF2+startValueOffset,GF2+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
+						break
+					except:
+						print "Fitter exception encountered"
+						startValueOffset += 0.001
+						exceptCount      += 1	
+						if exceptCount > 3:
+							print "Too many failed attempts in bin "+str(i)+": "+str(exceptCount)
+#							raise Exception
+							x, err = [0.,0.],[0.,0.]
+							break
 
-
+				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
+				outFile.write(' '+str(c2/ndf)+'\n')
+		return			
 ##### Writing starts here
 
 	fileNames = {}

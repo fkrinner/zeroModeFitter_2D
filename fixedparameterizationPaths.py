@@ -52,6 +52,9 @@ mappMerged = {
 
 
 def getFileNameForSector(sector, withBarrierFactors = False, merged = False):
+	if sector == "2-+1+[pi,pi]2++PiS":
+		return getFileNameForSector("2-+0+[pi,pi]2++PiS", withBarrierFactors = withBarrierFactors, merged = merged)
+
 	if withBarrierFactors:
 		folder = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/zeroModes/bwAmplitudes"
 	else:

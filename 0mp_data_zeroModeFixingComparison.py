@@ -7,10 +7,10 @@ import parameterizationClasses as pc
 from fixedparameterizationPaths import getFileNameForSector
 from modes import PHASE, AMPL, SMOOTH, NONE
 from utils import sumUp, weightedSum, cloneZeros, checkLaTeX
-import sys
+import sys,os
 import pyRootPwa
 import numpy as np
-from globalDefinitions import referenceWave, mPi, mK, mRho, Grho, mRhoPrime, GrhoPrime, mF0, g1, g2, mF2, GF2, Pr0
+from globalDefinitions import referenceWave, mPi, mK, mRho, Grho, mRhoPrime, GrhoPrime, mF0, g1, g2, mF2, GF2, Pr0, m1500, G1500
 from rootfabi import root_open
 import LaTeX_strings
 
@@ -22,11 +22,12 @@ import modernplotting.toolkit
 import modernplotting.specialPlots as mpsp
 import studyPlotter
 
+from LaTeX_strings import unCorrected_string, weightedAVG_string
 def doF0Fit(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = "", deg = 0, writeResultToFile = None):
 	fixedAMPD_sub = pc.fixedParameterization("/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/zeroModes/bwAmplitudes_noBF/amp_0mp0pSigmaPiS")
 
 	f0Mass   = ptc.parameter(mF0,"f0Mass")
-	f0Mass.lock = True
+#	f0Mass.lock = True
 	f0g1     = ptc.parameter(g1, "g1")
 	f0g2     = ptc.parameter(g2, "g2")
 #	f0g1.lock = True
@@ -72,6 +73,29 @@ def doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {},
 			resultString = str(tBins[0])+ " 666. " + str(rhoMass.value) + ' ' + str(rhoMass.error) + ' ' + str(rhoWidth.value) + ' ' + str(rhoWidth.error) + "\n"
 			outFile.write(resultString)
 	return fitRho
+
+def doFit1500(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]0++PiS": (1.15, 1.75)}, referenceWave = "", writeResultToFile = None):
+	fixedAMPD_sub = pc.fixedParameterization("/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/zeroModes/bwAmplitudes_noBF/amp_0mp0pSigmaPiS")
+	const = pc.constant()
+	linea = pc.linear()
+	f0mass  = ptc.parameter( m1500,  "1500mass" )
+	f0width = ptc.parameter( G1500 , "1500width")
+	f0_1500 = ptc.relativisticBreitWigner([f0mass,f0width], mPi, mPi, mPi, 0, 0, False)
+	fit1500 = amplitudeAnalysis(inFileName, sectors, {"0-+0+[pi,pi]0++PiS":[f0_1500, fixedAMPD_sub]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
+#	fit1500 = amplitudeAnalysis(inFileName, sectors, {"0-+0+[pi,pi]0++PiS":[f0_1500, const, linea]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
+	fit1500.loadData(referenceWave = referenceWave)
+	fit1500.finishModelSetup()
+	fit1500.fitShapeParameters()
+	fit1500.calculateNonShapeParameters()
+	fit1500.mode = AMPL
+#	fit1500.removeGlobalPhaseFromComa()
+	if writeResultToFile:
+		with open(writeResultToFile, 'a') as outFile:
+			if len(tBins) > 1:
+				raise ValueError("More than one t' bin not supported")
+			resultString = str(tBins[0])+ " 666. " + str(f0mass.value) + ' ' + str(f0mass.error) + ' ' + str(f0width.value) + ' ' + str(f0width.error) + "\n"
+			outFile.write(resultString)
+	return fit1500
 
 def doF0phase(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]0++PiS" : (0.34, 2*mK - .04)}, referenceWave = ""):
 	pipiSfileName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/zeroModes/bwAmplitudes_noBF/amp_0mp0pSigmaPiS"
@@ -144,14 +168,24 @@ def main():
 	style.p2dColorMap = 'Reds'
 
 	sectors          = ["0-+0+[pi,pi]0++PiS", "0-+0+[pi,pi]1--PiP"]
+#	rhoRange         = 1.2
+	rhoRange         = None
+	if not rhoRange:
+		sectorRangeMap = {}
+		rhoRangeString = ""
+	else:
+		sectorRangeMap = {"0-+0+[pi,pi]1--PiP":(0.,rhoRange)}
+		rhoRangeString = "_range"+str(rhoRange)
+
+
 	tBin = int(sys.argv[1])
 	if tBin < 0 or tBin > 3:
 		raise ValueError("Invalid t' bin: " + str(tBin))
 	if len(sys.argv) > 2:
-		study = sys.argv[2]
+		study      = sys.argv[2]
 		studyAdder = "_"+study
 	else:
-		study = "std11"
+		study      = "std11"
 		studyAdder = ""
 	print "Study: "+study
 
@@ -159,12 +193,12 @@ def main():
 
 	inFileName    = fileNameMap[study]
 	tBins            = [tBin]
+
 	startBin         = 11
 	stopBin          = 50
 
-#	startBin         = 27
-#	stopBin          = 38
-
+#	startBin     = 25
+#	stopBin      = 50
 
 	allMethods       = {}
 	methodStrings    = {}
@@ -178,6 +212,8 @@ def main():
 	                      "fitRho1G"        : r"$\text{fit}_\rho^{1\Gamma}$",
 	                      "fitRho2G"        : r"$\text{fit}_\rho^{2\Gamma}$",
 	                      "smooth"          : r"smooth"}
+
+	fit1500 = doFit1500(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "0mp_f0_1500_massesAndWidths_global.dat")
 
 	print "Start with fixed shape f0"
 	fixedShapeF0 = doFixedShapes(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave)
@@ -211,7 +247,7 @@ def main():
 #	print "Finished with phase"
 
 	print "Start with fitting rho"
-	fitRho = doFitRho(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "rhoMassesAndWidths_0-+0+1--_global.dat")
+	fitRho = doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap, referenceWave = referenceWave, writeResultToFile = "rhoMassesAndWidths_0-+0+1--_global.dat")
 	allMethods["fitRho"] = fitRho
 	print "Finished with fitting rho"
 
@@ -333,12 +369,13 @@ def main():
 		studyPlotter.makeValuePlot(plot, hist)
 
 		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(r"$\vec 0$")
-		axolotl.append(r"$\Omega$")
+		axolotl.append(unCorrected_string)
+		axolotl.append(weightedAVG_string)
 		plot.axes.set_xticklabels(axolotl, rotation = 90)
 		plot.setZlim((0.,1.))
 
 		pdfOutput.savefigAndClose()
+
 
 	with open("studies_0mp_data"+str(tBin)+studyAdder+".txt",'w') as out:
 		for axl in axolotl:
@@ -351,6 +388,9 @@ def main():
 
 ##### Writing starts here
 	doF0fitGlobal = False
+	doF0Fits      = False
+	doFits1500    = False
+	doRhoFits     = False
 	if doF0fitGlobal:
 		deg = 0
 #		f0fit = doF0Fit(inFileName, sectors[:1], startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]0++PiS":(0.9,1.1)}, referenceWave = referenceWave, deg = deg)
@@ -369,38 +409,86 @@ def main():
 			intensName = "./f0fits/0mp_intens_"+str(b)+"_"+str(tBin)+".pdf"
 			argandName = "./f0fits/0mp_argand_"+str(b)+"_"+str(tBin)+".pdf"
 			rv.writeBinToPdf(b, stdCmd = ["", intensName, [],  argandName, []])
-		return
-	doF0Fits = False
+
 	if doF0Fits:
-		f0fit = doF0Fit(inFileName, sectors[:1], startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]0++PiS":(0.9,1.1)}, referenceWave = referenceWave)
+		f0fit = doF0Fit(inFileName, sectors[:1], startBin, stopBin, tBins, sectorRangeMap = {"0-+0+[pi,pi]0++PiS":(0.9,1.1)}, referenceWave = referenceWave, writeResultToFile = "f0MassesAndWidths_0-+0+0++_global.dat")
 		with open("./f0MassesAndWidths_0mp_"+str(tBin)+".dat",'w') as outFile:
 			for i in range(stopBin-startBin):
 				binIndex = i+startBin
 				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
 				startValueOffset = 0.00
 				exceptCount      = 0
-				try:
+#				try:
+				if True:
 					startPars = [mF0+startValueOffset,g1+startValueOffset,g2+startValueOffset]
-					for _ in range(deg):
-						startPars.append(startValueOffset)
-						startPars.append(startValueOffset)
-					x,err = f0fit.fitShapeParametersForBinRange(startPars, [0],[i], zeroModeParameters = resolvedWeightedSum)
-				except:
-					print "Fitter exception encountered"
-					startValueOffset += 0.001
-					exceptCount      += 1
-					if exceptCount > 3:
-						raise Exception("Too many failed attempts: "+str(exceptCount))
+#					for _ in range(deg):
+#						startPars.append(startValueOffset)
+#						startPars.append(startValueOffset)
+					x,err,c2,ndf = f0fit.fitShapeParametersForBinRange(startPars, [0],[i], zeroModeParameters = resolvedWeightedSum)
+#				except:
+#					print "Fitter exception encountered"
+#					startValueOffset += 0.001
+#					exceptCount      += 1
+#					if exceptCount > 3:
+#						raise Exception("Too many failed attempts: "+str(exceptCount))
 
+				f0fit.calculateNonShapeParametersForZeroModeParameters(resolvedWeightedSum)
+				RV980 = f0fit.produceResultViewer(resolvedWeightedSum,"0-+0+[pi,pi]0++PiS", noRun = True, plotTheory = True)
+				RV980.plotData = True
+				plotNameBase = "./980FitPlots/0mp0p0ppPiS_<mode>_"+str(binIndex)+"_"+str(tBin)+".pdf"
+				RV980.writeBinToPdf(binIndex, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
+				if binIndex == 32:
+					RV980.writeToRootFile("980.root")
 				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1])+ ' ' + str(x[2]) + ' ' + str(err[2]))
-				for i in range(deg):
-					outFile.write( ' ' + str(x[3+i]) + ' ' + str(err[3+i]) + ' ' + str(x[4+i]) + ' ' +str(err[4+i]))
-				outFile.write('\n')
-		return
+#				for i in range(deg):
+#					outFile.write( ' ' + str(x[3+i]) + ' ' + str(err[3+i]) + ' ' + str(x[4+i]) + ' ' +str(err[4+i]))
+				outFile.write(' ' +str(c2/ndf)+'\n')
 
-	doRhoFits = True
+	if doFits1500:
+		with open("./0mp_f0_1500massesAndWidths_"+str(tBin)+".dat",'w') as outFile:
+			for i in range(stopBin-startBin):
+				binIndex = i + startBin
+				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
+				startValueOffset = 0.00
+				exceptCount      = 0
+				if True:
+					startPars = [m1500+startValueOffset,G1500+startValueOffset]
+#					for _ in range(deg):
+#						startPars.append(startValueOffset)
+#						startPars.append(startValueOffset)
+					x,err,c2,ndf = fit1500.fitShapeParametersForBinRange(startPars, [0],[i], zeroModeParameters = resolvedWeightedSum)
+#				except:
+#					print "Fitter exception encountered"
+#					startValueOffset += 0.001
+#					exceptCount      += 1
+#					if exceptCount > 3:
+#						raise Exception("Too many failed attempts: "+str(exceptCount))
+
+				
+				fit1500.calculateNonShapeParametersForZeroModeParameters(resolvedWeightedSum)
+				RV1500 = fit1500.produceResultViewer(resolvedWeightedSum,"0-+0+[pi,pi]0++PiS", noRun = True, plotTheory = True)
+				RV1500.plotData = True
+				plotNameBase = "./1500FitPlots/0mp0p0ppPiS_<mode>_"+str(binIndex)+"_"+str(tBin)+".pdf"
+				RV1500.writeBinToPdf(binIndex, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
+				if binIndex == 32:
+					RV1500.writeToRootFile("1500.root")
+
+
+				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
+#				for i in range(deg):
+#					outFile.write( ' ' + str(x[3+i]) + ' ' + str(err[3+i]) + ' ' + str(x[4+i]) + ' ' +str(err[4+i]))
+				if not ndf == 0:
+					outFile.write(' ' +str(c2/ndf)+'\n')
+				else:
+					outFile.write(' noNDF \n')
+
 	if doRhoFits:
-		with open("./rhoMassesAndWidths_0mp_"+str(tBin)+".dat",'w') as outFile:
+		cplFileName = "0mp_rho_cpls_"+str(tBin)+".dat"
+		try:
+			os.remove(cplFileName)
+		except:
+			pass
+		with open("./rhoMassesAndWidths_0mp_"+str(tBin)+rhoRangeString+".dat",'w') as outFile:
 			for i in range(stopBin-startBin):
 				binIndex = i+startBin
 				outFile.write(str(binIndex)+' '+str(0.52 + 0.04*binIndex)+' ')
@@ -417,6 +505,22 @@ def main():
 
 				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
 				outFile.write(' ' +str(c2/ndf)+'\n')
+
+				fitRho.calculateNonShapeParametersForZeroModeParameters(resolvedWeightedSum)
+				rhoRV = fitRho.produceResultViewer(resolvedWeightedSum,"0-+0+[pi,pi]1--PiP", noRun = True, plotTheory = True)
+				rhoRV.plotData = True
+				plotNameBase = "./rhoFitPlots/0mp0p1mmPiP_<mode>_"+str(binIndex)+"_"+str(tBin)+".pdf"
+				rhoRV.writeBinToPdf(binIndex, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
+
+#				with open(cplFileName,'a') as outFileCpl:
+#					fitRho.calculateNonShapeParameters()
+#					cpl, hess = fitRho.getCouplingParameters()
+#					outFileCpl.write(str(cpl[0][i]))
+#					outFileCpl.write(", ")
+#					outFileCpl.write(str(hess[0][i]))
+#					outFileCpl.write("\n")
+
+	if doF0fitGlobal or doF0Fits or doFits1500 or doRhoFits:
 		return
 
 	fileNames = {}
@@ -435,7 +539,9 @@ def main():
 				fileNames[sect,bin].append(fileName)
 				rv.writeAmplFiles(bin, fileName = fileName)
 
+
 	totalHists = fixedShapes.getTotalHists(resolvedWeightedSum)
+#	studyAdder = "_noCorr"
 
 	with root_open("./totals_0mp"+studyAdder+".root", "UPDATE") as out:
 		for t in totalHists:
@@ -444,16 +550,20 @@ def main():
 #	return
 	folder = "./comparisonResultsData"+studyAdder+"/"
 	for s, sect in enumerate(allMethods['fixedShapes'].sectors):
-		allMethods['fixedShapes'].removeZeroModeFromComa()
-		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
+#		allMethods['fixedShapes'].removeZeroModeFromComa()
+#		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
 		rv = allMethods['fixedShapes'].produceResultViewer(resolvedWeightedSum,s, noRun = True, plotTheory = True)
+
 		rv.writeBinToPdf(startBin, stdCmd = [folder + sect + "_data_2D_"+str(tBin)+".pdf", "", [], "", []])
 		for b in range(startBin, stopBin):
+			if  not b == 32:
+				continue 
+			rv.replaceFromRootFile("f0s.root",2)
 			intensNames = [name+".intens" for name in fileNames[sect,b]]
 			argandNames = [name+".argand" for name in fileNames[sect,b]]
 			intensNames = []
 			argandNames = []
-			rv.plotData = False
+			rv.plotData = True
 			rv.writeBinToPdf(b, stdCmd = ["", folder + sect + "_data_intens_"+str(b)+"_"+str(tBin)+".pdf", intensNames,  folder + sect + "_data_argand_"+str(b)+"_"+str(tBin)+".pdf", argandNames])
 	print studyList
 	print cumulWeights

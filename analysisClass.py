@@ -14,6 +14,7 @@ from LaTeX_strings import getProperWaveName, getProperDataSet
 from resultViewerClass import resultViewer
 from utils import loadAmplsTM, changeReferenceWave
 from estimateErrors import estimateErrors,estimateErrors2,estimateErrors3
+from math import isnan
 
 class amplitudeAnalysis:
 	"""
@@ -60,7 +61,10 @@ class amplitudeAnalysis:
 			self.setZeroModeParameters(zeroModeParameters)
 		self.model.setBinsToEvalueate(tBinsToEvaluate,mBinsToEvaluate)
 		pars = startPars[:]
+		resNM     = scipy.optimize.minimize(self.model.fixedZMPchi2, pars, method = 'Nelder-Mead')
 		res       = scipy.optimize.minimize(self.model.fixedZMPchi2, pars)
+		print "message(termination result):",resNM.message,'(',mBinsToEvaluate,')'
+		print resNM.x, res.x
 		hi        = res.hess_inv
 		errs      = []
 		startErrs = []
@@ -69,8 +73,12 @@ class amplitudeAnalysis:
 		for i in range(len(res.x)):
 #			print hi[i,i],"::::::::::::::::::::{{}"
 			errs.append((2.*hi[i,i])**.5)
+			print "sigerr",(res.x[i]-resNM.x[i])/errs[i]
+
 		errs = estimateErrors2(self.model.chi2, pars, errs)
 		NDF  = self.model.getFixedZMndf()
+
+		print "---------------------------------------------------------------------"
 
 		return res.x, errs, res.fun, NDF
 
@@ -156,13 +164,13 @@ class amplitudeAnalysis:
 				self.histListReal = histListReal
 
 			with root_open(self.zeroFileName, "READ") as inFile:
-				zeroCount = 0
+				zeroCount     = 0
 				zeroHistList  = []
 				eigenHistList = []
 				while True:
 					zeroName  = "zero"+str(zeroCount)+"_"+str(tBin)
 					eigenName = "eigen"+str(zeroCount)+"_"+str(tBin)
-					zeroHist = inFile.Get(zeroName)
+					zeroHist  = inFile.Get(zeroName)
 					if not zeroHist:
 						break
 #					print "Adding zero-mode"
@@ -354,6 +362,12 @@ class amplitudeAnalysis:
 			tBin.removeGlobalPhaseFromComa()
 		self.SET('noPhaseDir')
 
+	def removeAllCorrelations(self):
+		"""
+		Removes ALL correlations from the covariance matrix (Simple t' bin loop)
+		"""
+		self.model.removeAllCorrelations()
+
 	def unifyComa(self):
 		"""
 		Sets covariance matrices to unity
@@ -392,8 +406,13 @@ class amplitudeAnalysis:
 			errs      = []
 			startErrs = []
 			pars = res.x[:]
+			
+
 			for i in range(len(res.x)):
-				errs.append((2.*hi[i,i])**.5)
+				if isnan(hi[i,i]):
+					errs.append(1.)
+				else:
+					errs.append((2.*hi[i,i])**.5)
 			print "errs before",errs
 			print "do not estimate errors!!!"
 #			errs = estimateErrors3(self.model.chi2, pars, errs)
@@ -884,7 +903,7 @@ class amplitudeAnalysis:
 			return ndf - nnon
 		raise RuntimeError("No mode set")
 
-	def produceResultViewer(self, nonShapeParameters, sector, tBin = -1, noRun = False, plotTheory = False):
+	def produceResultViewer(self, nonShapeParameters, sector, tBin = -1, noRun = False, plotTheory = False, removeZM = True):
 		"""
 		Produces a result viewer for the given zero mode parameters
 		"""
@@ -895,8 +914,9 @@ class amplitudeAnalysis:
 			else:
 				raise Exception("tBin not specified")
 
-		for tt in self.model:
-			tt.removeZeroModeFromComa()
+		if removeZM:
+			for tt in self.model:
+				tt.removeZeroModeFromComa()
 
 		self.evaluateZeroModeParametersForMode(self.getZeroModeParametersForMode())
 		nSect = self.getSectorIndex(sector)

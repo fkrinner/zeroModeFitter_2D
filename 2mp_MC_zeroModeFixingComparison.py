@@ -18,6 +18,8 @@ import modernplotting.toolkit
 import modernplotting.specialPlots as mpsp
 import studyPlotter
 
+from LaTeX_strings import unCorrected_string, weightedAVG_string
+
 intensWeight = False
 reweightInverseBW = False 
 
@@ -114,7 +116,7 @@ def doF0phase(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {"
 	fitPiPiSshape.phaseFit()
 	fitPiPiSshape.mode = PHASE
 #	fitPiPiSshape.removeGlobalPhaseFromComa()
-	fitPiPiSshape.unifyComa()
+#	fitPiPiSshape.unifyComa()
 	return fitPiPiSshape
 
 alphabet = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
@@ -174,7 +176,7 @@ def main():
 #	style.p2dColorMap = 'YlOrRd'
 	style.p2dColorMap = 'Reds'
 
-	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC.root"
+	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_MC_corrected.root"
 #	inFileName = "/nfs/mds/user/fkrinner/extensiveFreedIsobarStudies/results_std11.root"
 	sectors          = ["2-+0+[pi,pi]0++PiD", "2-+0+[pi,pi]1--PiP", "2-+0+[pi,pi]1--PiF", "2-+0+[pi,pi]2++PiS"]
 	tBins            = [0]
@@ -350,8 +352,8 @@ def main():
 		studyPlotter.makeValuePlot(plot, hist)
 		
 		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(r"$\vec 0$")
-		axolotl.append(r"$\Omega$")
+		axolotl.append(unCorrected_string)
+		axolotl.append(weightedAVG_string)
 		plot.axes.set_xticklabels(axolotl, rotation = 90)
 		plot.setZlim((0.,1.))
 

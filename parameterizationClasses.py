@@ -347,6 +347,63 @@ class fixedParameterization(parameterization):
 		self.setParameters(params)
 		return True
 
+class constant(parameterization):
+	"""
+	Constant
+	"""
+	def __init__(self):
+		self.nPar        = 0
+		self._parNames   = []
+		self._parameters = []
+		self.parameters  = []
+
+
+	def __call__(self, ms, par = None, externalKinematicVariables = []):
+		if par is None:
+			par = self._parameters
+		if not len(par) == self.nPar:
+			raise IndexError("fixedParameterization: Wrong number of parameters")
+		return np.full(len(ms), 1.+0.j, dtype = complex)
+
+	def setParametersAndErrors(self, params, errors):
+		"""
+		Only a dummy for zero-parameter versions
+		"""
+		if not len(params) == 0:
+			raise IndexError("No parameters in constant")
+		self.setParameters(params)
+		return True
+
+class linear(parameterization):
+	"""
+	Linear
+	"""
+	def __init__(self):
+		self.nPar        = 0
+		self._parNames   = []
+		self._parameters = []
+		self.parameters  = []
+
+
+	def __call__(self, ms, par = None, externalKinematicVariables = []):
+		if par is None:
+			par = self._parameters
+		if not len(par) == self.nPar:
+			raise IndexError("fixedParameterization: Wrong number of parameters")
+		retVal = np.zeros(len(ms), dtype = complex)
+		for i in range(len(ms)):
+			retVal[i] = ms[i]
+		return retVal
+
+	def setParametersAndErrors(self, params, errors):
+		"""
+		Only a dummy for zero-parameter versions
+		"""
+		if not len(params) == 0:
+			raise IndexError("No parameters in constant")
+		self.setParameters(params)
+		return True
+
 
 def main():
 	ms = []

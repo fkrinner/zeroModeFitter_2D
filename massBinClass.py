@@ -77,18 +77,36 @@ class massBin:
 		self.borders = [0]
 		for i in range(self.nSect):
 			self.borders.append(self.borders[-1] + self.nBins[i])
-		self.nZero           =  0
-		self.zeroModes       = [ ]
-		self.zeroModeNumbers = [ ]
-		self.zeroModeTitles  = [ ]
-		self.zeroEigenvalues = [ ]
-		self.hasTheo         = False
-		self.hasMassRange    = False
-		self.chi2init        = False
+		self.nZero                    =  0
+		self.zeroModes                = [ ]
+		self.zeroModeNumbers          = [ ]
+		self.zeroModeTitles           = [ ]
+		self.zeroEigenvalues          = [ ]
+		self.hasTheo                  = False
+		self.hasMassRange             = False
+		self.chi2init                 = False
 		self.zeroModesRemovedFromComa = False
 		self.specialCOMAs             = { }
 		self.hasZMP                   = False
 		self.zeroModeParameters       = None
+
+	def getIntegralForFunction(self, sector, function):
+		if not self.hasIntegralMatrix:
+			raise RuntimeError("Cannot construct function integral without integral matrix")
+		s        = self.getSectorInt(sector)
+		startBin = self.borders[s  ]
+		stopBin  = self.borders[s+1]
+		ms       = self.binCenters[startBin:stopBin]
+		vals     = function(ms, externalKinematicVariables = [self.binCenter])
+		integral = 0.
+		for i,b in enumerate(range(startBin,stopBin)):
+			vals[i] *= self.norms[b]**.5
+		for i,b in enumerate(range(startBin,stopBin)):
+			for j,d in enumerate(range(startBin, stopBin)):
+				integral += vals[i].conjugate()*vals[j]*self.integralMatrix[b,d]
+		if integral.imag > self.numLim:
+			raise ValueError("Integral witn non-zero imaginariy part encoutnered")
+		return integral.real
 
 	def getSectorTotals(self, parameters, binRange = {}, zeroModeSubtract = False):
 		if not self.hasIntegralMatrix:
@@ -151,7 +169,6 @@ class massBin:
 									continue
 								transformationMatrix[2*i  ,2*j  ] -= self.zeroModes[z][i]*self.zeroModes[z][j]/z2
 								transformationMatrix[2*i+1,2*j+1] -= self.zeroModes[z][i]*self.zeroModes[z][j]/z2
-							
 			if abs(total.imag) > self.numLim:
 				raise ValueError("Total has non-vanishing imag part: " + str(total))
 			jacobian = np.dot(realizedMatrix, amplsForErrors)
@@ -167,6 +184,7 @@ class massBin:
 		"""
 		Initializes the chi2 function
 		"""
+#		print "Set nPar to zero"
 		self.nPar   =  0
 		self.nFuncs = [ ]
 		self.funcs  = self.toIntegerSectorMap(sectorFuncMap)
@@ -177,6 +195,7 @@ class massBin:
 				self.nFuncs.append(len(self.funcs[s]))
 				for f in self.funcs[s]:
 					self.nPar += f.nPar
+#					print "Add",f.nPar,'to self.nPar:',self.nPar
 		self.nFunc = 0
 		for val in self.nFuncs:
 			self.nFunc += val
@@ -188,11 +207,14 @@ class massBin:
 		"""
 		if not self.chi2init:
 			raise RuntimeError("chi2 not inited, cannot evaluate")
+			print pars
 		if len(pars) > 0:
 			self.setShapeParameters(pars)
 		A,B,C = self.getOwnTheoryABC()
-		zmPars  = -np.dot(B, la.pinv(A + np.transpose(A)))
-#		zmPars  = -np.dot(B, utils.pinv(A + np.transpose(A)))
+#		zmPars  = -np.dot(B, la.pinv(A + np.transpose(A)))
+#		print B
+#		print A
+		zmPars  = -np.dot(B, utils.pinv(A + np.transpose(A)))
 		chi2  = np.dot(zmPars,np.dot(A,zmPars)) + np.dot(zmPars,B) + C
 
 		if returnParameters:
@@ -244,7 +266,6 @@ class massBin:
 	def getFcnCplsHess(self, zeroModePars):
 		A,B,C = self.getFcnCplsABC(zeroModePars)
 		return np.transpose(A) + A
-		
 
 	def getFcnCpls(self, zeroModePars):
 		A,B,C = self.getFcnCplsABC(zeroModePars)
@@ -275,7 +296,7 @@ class massBin:
 			raise ValueError("Number of zero modes does not match (1)")
 		if not len(params2) == 2*self.nZero:
 			raise ValueError("Number of zero modes does not match (2)")
-		deltas = np.zeros((2*self.totalBins))	
+		deltas = np.zeros((2*self.totalBins))
 		print '--------in mass bin class'
 		print '--------',params1
 		print '--------',params2
@@ -554,6 +575,17 @@ class massBin:
 		"""
 		self.comaInv = utils.pinv(self.coma, self.numLim)
 
+	def removeAllCorrelations(self):
+		"""
+		Removes ALL correlations from the covariance matrix
+		"""
+		print "Remove correlations"
+		for i in range(len(self.coma)):
+			for j in range(len(self.coma)):
+				if not i == j:
+					self.coma[i,j] = 0.
+		self.makeComaInv()
+		self.specialCOMAs = {}
 
 	def removeZeroModeFromComa(self):
 		"""
@@ -651,7 +683,7 @@ class massBin:
 
 	def setTheoryFromOwnFunctions(self, parameterList, restrictToRange = True):
 		"""
-		Sets theory curves from own functions	
+		Sets theory curves from own functions
 		"""
 		if self.hasMassRange and not restrictToRange:
 			raise RuntimeError("Setting a mass range now changes the COMA, this combination of features is not avalable anymore")
@@ -1002,7 +1034,7 @@ class massBin:
 	def rotateToPhaseOfBin(self, nBin):
 		"""
 		Rotates the global phase, that the phase of nBin is zero
-		"""	
+		"""
 		ampl = self.reals[nBin] + 1.j*self.imags[nBin]
 		self.removePhase(ampl)
 
@@ -1036,6 +1068,17 @@ class massBin:
 					print i,j,self.coma[i,j],self.coma[j,i]
 					return False
 		return True
+
+	def getSectorInt(self, sect):
+		if isinstance(sect, int):
+			if sect < 0 or sect >= len(self.sectors):
+				raise ValueError("Sector index out of range: "+str(sect))
+			return sect
+		else:
+			for s, listSect in enumerate(self.sectors):
+				if listSect == sect:
+					return s
+		raise ValueError("Could not find sector number for '" + sect + "'")
 
 	def toIntegerSectorMap(self, mapp):
 		"""

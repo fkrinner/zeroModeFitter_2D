@@ -3,6 +3,8 @@ import numpy.linalg as la
 import os, sys 
 import pyRootPwa
 
+from math import pi, exp, log, atan
+
 numLim = 1.E-10
 INF = float("inf")
 
@@ -353,11 +355,276 @@ def changeReferenceWave(histListReal, histListImag, histListIndx, comaHists, ref
 		for i in range(dim):
 			for j in range(dim):
 				comaHists[iComa].SetBinContent(i+1,j+1, newComa[i,j])
-		
+
+def gaus1D(x,par):
+	"""
+	Parameter ordering: norm, meanX, sigX
+	"""
+	exponent = -(x-par[1])**2/par[2]**2/2
+	norm     =  par[0]/(2*pi)**.5/par[2]
+	retVal   =  norm*exp(exponent)
+	return retVal
+
+def gaus2D(x,y,par):
+	"""
+	Parameter ordering: norm, meanX, sigX, meanY, sigY, correl
+	"""
+	if not len(par) == 6:
+		raise ValueError("Wrong number of parameters: "+str(len(par)))
+	correl = atan(par[5])*2/pi*par[2]*par[4]
+#	correl   = par[5]*par[2]*par[4]
+	detComa  = par[2]**2 * par[4]**2 - correl**2
+	inverse  = [[par[4]**2/detComa, -correl/detComa],[-correl/detComa,par[2]**2/detComa]]
+	exponent = 0.
+	d        = [par[1] - x, par[3] - y]
+	for i in range(2):
+		for j in range(2):
+			exponent += d[i]*d[j]*inverse[i][j]
+	retVal = par[0]/2/pi/detComa**.5 * exp(-exponent/2)
+#	if isnan(retVal):
+#		print "NAN",  detComa, exponent, retVal
+	return retVal
+
+def gaus3D(x,y,z,par):
+	"""
+	Parameter ordering: norm, meanX, sigX, meanY, sigY, meanZ, sigZ, correlXY, correlXZ, correlYZ
+	"""
+	if not len(par) == 10:
+		raise ValueError("Wrong number of parameters: "+str(len(par)))
+	cXY = atan(par[7])*2/pi*par[2]*par[4]
+	cXZ = atan(par[8])*2/pi*par[2]*par[6]
+	cYZ = atan(par[9])*2/pi*par[4]*par[6]
+	d        = [par[1] - x, par[3] - y, par[5] - z]
+	coma = np.asarray([[par[2]**2, cXY, cXZ],[cXY, par[4]**2, cYZ],[cXZ, cYZ, par[6]**2]])
+	inverse = la.inv(coma)
+	exponent = 0.
+	for i in range(3):
+		for j in range(3):
+			exponent += d[i]*d[j]*inverse[i,j]
+	retVal = par[0]/(8*(pi)**3*la.det(coma))**.5 * exp(-exponent/2)
+	return retVal
+	
+
+class oneDgaussFuncLike:
+	def __init__(self, values):
+		self.values  = values
+		self.nPoints = len(values)
+		if self.nPoints == 0:
+			raise ValueError("No values given")
+		if isinstance(values[0], float):
+			self.isFloat  = True
+			self.weighted = False
+		else:
+			self.isFloat = False
+			if len(values[0]) == 1:
+				self.weighted = False
+			elif len(values[0]) == 2:
+				self.weighted = True
+			else:
+				raise ValueError("Number of values invalid: Neither x, (x), nor (x,weight)")
+		self.nPrint = -1
+		self.count  =  0
+
+	def __call__(self,par):
+		like = 0.
+		self.count += 1
+		pars = [1.]*3
+		for i in range(2):
+			pars[i+1] = par[i]
+		for vals in self.values:
+			if self.isFloat:
+				x = vals
+			else:
+				x = vals[0]
+			gausVal = gaus1D(x, pars)
+			if gausVal < 0.:
+				continue
+			logVal = log(gausVal)
+			if self.weighted:
+				like -= vals[1] * logVal
+			else:
+				like -= logVal
+		if self.nPrint > 0 and self.count%self.nPrint == 0:
+			print '#' + str(self.count), 
+			print like,
+			print par
+		return like			
+
+class twoDgaussFuncLike:
+	def __init__(self, values):
+		self.values  = values
+		self.nPoints = len(values)
+		if self.nPoints == 0:
+			raise ValueError("No values given")
+		if len(self.values[0]) == 2:
+			self.weighted = False
+		elif len(self.values[0]) == 3:
+			self.weighted = True
+		else:
+			raise ValueError("Number of values invalid: Neither (x,y), nor (x,y,weight)")
+		self.nPrint = -1
+		self.count  =  0
+
+	def __call__(self, par):
+		like = 0.
+		self.count += 1
+		pars = [1.]*6
+		for i in range(5):
+			pars[i+1] = par[i]
+		for vals in self.values:
+			gausVal = gaus2D(vals[0], vals[1], pars)
+			if gausVal <= 0.:
+				continue
+			logVal = log(gausVal)
+			if self.weighted:
+				like -= vals[2] * logVal
+			else:
+				like -= logVal
+		if self.nPrint > 0 and self.count%self.nPrint == 0:
+			print '#' + str(self.count), 
+			print like,
+			print par
+		return like
+
+class threeDgaussFuncLike:
+	def __init__(self, values):
+		self.values  = values
+		self.nPoints = len(values)
+		if self.nPoints == 0:
+			raise ValueError("No values given")
+		if len(self.values[0]) == 3:
+			self.weighted = False
+		elif len(self.values[0]) == 4:
+			self.weighted = True
+		else:
+			raise ValueError("Number of values invalid: Neither (x,y), nor (x,y,weight)")
+		self.nPrint = -1
+		self.count  =  0
+
+	def __call__(self, par):
+		like = 0.
+		self.count += 1
+		pars = [1.]*10
+		for i in range(9):
+			pars[i+1] = par[i]
+		for vals in self.values:
+			gausVal = gaus3D(vals[0], vals[1],vals[2], pars)
+			if gausVal <= 0.:
+				continue
+			logVal = log(gausVal)
+			if self.weighted:
+				like -= vals[3] * logVal
+			else:
+				like -= logVal
+		if self.nPrint > 0 and self.count%self.nPrint == 0:
+			print '#' + str(self.count), 
+			print like,
+			print par
+		return like
+
+class twoDgausFunc:
+	def __init__(self, hist2D, isLike = False):
+		self.hist   = hist2D
+		self.isLike = isLike
+		self.count  =  0
+		self.nPrint = -1
+		self.mbc    = -1 # minBinContent for evaluation
+
+	def __call__(self, par):
+		chi2 = 0.
+		like = 0.
+		pars = par
+		self.count += 1
+		if self.isLike:
+			pars = [1.]*6
+			for i in range(5):
+				pars[i+1] = par[i]
+
+		for i in range(self.hist.GetNbinsX()):
+			x = self.hist.GetXaxis().GetBinCenter(i+1)
+			for j in range(self.hist.GetNbinsY()):
+				entries = self.hist.GetBinContent(i+1, j+1)
+				if entries == 0. and self.isLike:
+					continue
+				if entries < self.mbc:
+					continue
+
+				y = self.hist.GetYaxis().GetBinCenter(j+1)
+				gausVal = gaus2D(x,y,pars)
+				if not entries == 0.:
+					chi2 += (entries - gausVal)**2/entries
+				else:
+					chi2 += gausVal**2
+					pass
+				if gausVal > 0.:
+					like -= entries*log(gausVal)
+		if self.nPrint > 0 and self.count%self.nPrint == 0:
+			print '#' + str(self.count), 
+			if self.isLike:
+				print like,
+			else:
+				print chi2
+			print par
+
+		if self.isLike:
+			return like
+		else:
+			return chi2
+
+	def ndf(self):
+		ndf = 0
+		for i in range(self.hist.GetNbinsX()):
+			for j in range(self.hist.GetNbinsY()):
+				if self.hist.GetBinContent(i+1,j+1) >= self.mbc:
+					ndf += 1
+		return ndf - 6
+
+	def makeDrawHist(self, par):
+		pars = par
+		if self.isLike:
+			pars = [1.]*6
+			for i in range(5):
+				pars[i+1] = par[i]
+		newHist = self.hist.Clone()
+		for i in range(self.hist.GetNbinsX()):
+			x = self.hist.GetXaxis().GetBinCenter(i+1)
+			for j in range(self.hist.GetNbinsY()):
+				y = self.hist.GetYaxis().GetBinCenter(j+1)
+				gausVal = gaus2D(x,y,pars)
+				newHist.SetBinContent(i+1, j+1, gausVal)
+		return newHist
+
 
 def main():
-	checkLaTeX()
-	print "Ran"
+	from random import random
+	def leDiste():
+		while True:
+			x = (random() - .5)
+			if exp(-abs(x)) > random():
+				return x
+
+	nPoints = 10000
+	pts     = []
+	avg = 0.
+	for i in range(nPoints):
+		print i
+		p = leDiste()
+		pts.append([p,random()])
+		avg += p
+	avg /= len(pts)
+	sig = 0.
+	for p in pts:
+		sig += (avg - p[0])**2
+	sig/= len(pts)-1
+	sig**=.5
+	print "avg",avg,"sig",sig
+
+	likeFunc = oneDgaussFuncLike(pts)
+	par = [0.,1.]
+	import scipy.optimize as opt
+	res = opt.minimize(likeFunc, par)
+	print res.x
+
 
 if __name__ == "__main__":
 	main()
