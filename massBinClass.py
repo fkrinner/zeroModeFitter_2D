@@ -6,6 +6,11 @@ from utils import getZeroHistSectors, normVector, getZeroModeNumber, printZeroSt
 import cmath
 from cmath import phase, pi
 from modes import INTENS, PHASE, REAL, IMAG, INTENSNORM, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO, REIMCORRELATION
+import sys
+
+def CMwrite(val):
+	with open("comaLog", 'a') as outFile:
+		outFile.write(str(val) + '\n')
 
 class massBin:
 	def __init__(self, nBin, realHists, imagHists, normHists, indexHists, coma, integralReal = None, integralImag = None):
@@ -41,6 +46,7 @@ class massBin:
 		self.reals      = np.zeros((self.totalBins))
 		self.imags      = np.zeros((self.totalBins))
 		self.norms      = np.zeros((self.totalBins))
+#	#	CMwrite("__init__")
 		self.coma       = np.zeros((2*self.totalBins,2*self.totalBins))
 		self.hasIntegralMatrix = False
 		if integralReal and integralImag:
@@ -51,7 +57,8 @@ class massBin:
 		elif integralImag:
 			raise RuntimeError("Cannot handle imaginary integral matrix only, need also real")
 		self.binCenters = np.zeros((self.totalBins))
-		self.numLim     = 1.e-8
+		self.numLim     = 2.e-8
+		self.ownPinv    = True
 		count = 0
 		for s in range(self.nSect):
 			for bin in range(self.nBins[s]):
@@ -73,6 +80,7 @@ class massBin:
 							self.integralMatrix[count,count2] = val
 						count2 += 1
 				count +=1
+		self.hasMassRange             = False
 		self.makeComaInv()
 		self.borders = [0]
 		for i in range(self.nSect):
@@ -83,12 +91,13 @@ class massBin:
 		self.zeroModeTitles           = [ ]
 		self.zeroEigenvalues          = [ ]
 		self.hasTheo                  = False
-		self.hasMassRange             = False
 		self.chi2init                 = False
 		self.zeroModesRemovedFromComa = False
+		self.globalPhaseRemoved       = False
 		self.specialCOMAs             = { }
 		self.hasZMP                   = False
 		self.zeroModeParameters       = None
+		self.hasRandomizedAmplitudes  = False
 
 	def getIntegralForFunction(self, sector, function):
 		if not self.hasIntegralMatrix:
@@ -108,11 +117,64 @@ class massBin:
 			raise ValueError("Integral witn non-zero imaginariy part encoutnered")
 		return integral.real
 
-	def getSectorTotals(self, parameters, binRange = {}, zeroModeSubtract = False):
+	def unrandomize(self):
+		"""
+		Removes previously done gaussian randomization
+		"""
+		if not self.hasRandomizedAmplitudes:
+			print "Warning: 'unrandomize' called, but has not been randomized"
+		for i in range(self.totalBins):
+			self.reals[i] -= self.randoms[2*i  ]
+			self.imags[i] -= self.randoms[2*i+1]
+		self.hasRandomizedAmplitudes = False
+		del self.randoms
+
+	def randomize(self):
+		"""
+		Randomize data points with a gaussian according to the covariance matrix
+		"""
+		if self.hasRandomizedAmplitudes:
+			self.unrandomize()
+		self.randoms = np.random.multivariate_normal(np.zeros((2*self.totalBins)), self.coma)
+		for i in range(self.totalBins):
+			self.reals[i] += self.randoms[2*i  ]
+			self.imags[i] += self.randoms[2*i+1]
+		self.hasRandomizedAmplitudes = True
+
+	def getTheoryTotalMatrices(self, binRange = None):
+		if not self.hasIntegralMatrix:
+			raise RuntimeError("Cannot construct theory totals without integral matrix")
+		totalMatrices = []
+		for s in range(self.nSect):
+			total = 0.
+			startBin = self.borders[s  ]
+			stopBin  = self.borders[s+1]
+			masses = self.binCenters[startBin:stopBin]
+			nFunc  = self.nFuncs[s]
+			ampls  = [f(masses, externalKinematicVariables = [self.binCenter]) for f in self.funcs[s]]
+			if binRange is not None:
+				sect = self.sectors[s]
+				if not sect in binRange:
+					continue
+				rang = range(binRange[sect][0], binRange[sect][1])
+				for b in range(stopBin-startBin):
+					if not b in rang:
+						for f in range(len(ampls)):
+							ampls[f][b] = 0.
+			totalMatrix = np.zeros((nFunc,nFunc), dtype = complex)
+			for iSect, iFull in enumerate(range(startBin,stopBin)):
+				for jSect, jFull in enumerate(range(startBin,stopBin)):
+					for iF in range(nFunc):
+						for jF in range(nFunc):
+							totalMatrix[iF,jF] += ampls[iF][iSect].conjugate() * self.integralMatrix[iFull,jFull] * ampls[jF][jSect]*(self.norms[iFull]*self.norms[jFull])**.5
+			totalMatrices.append(totalMatrix)
+		return totalMatrices
+
+	def getSectorTotals(self, parameters, binRange = None, zeroModeSubtract = False):
 		if not self.hasIntegralMatrix:
 			raise RuntimeError("Cannot construct totals without integral matrix")
 		ampls        = self.getCorrectedAmplitudes(parameters)
-		if not binRange == {}:
+		if binRange is not None:
 			for s in range(self.nSect):
 				sect = self.sectors[s]
 				if not sect in binRange:
@@ -208,13 +270,19 @@ class massBin:
 		if not self.chi2init:
 			raise RuntimeError("chi2 not inited, cannot evaluate")
 			print pars
-		if len(pars) > 0:
+		if len(pars) is not 0:
 			self.setShapeParameters(pars)
 		A,B,C = self.getOwnTheoryABC()
-#		zmPars  = -np.dot(B, la.pinv(A + np.transpose(A)))
+
 #		print B
 #		print A
-		zmPars  = -np.dot(B, utils.pinv(A + np.transpose(A)))
+
+		if self.ownPinv:
+			zmPars  = -np.dot(B, utils.pinv(A + np.transpose(A), numLim = self.numLim))
+		else:
+			zmPars  = -np.dot(B, la.pinv(A + np.transpose(A)))
+
+
 		chi2  = np.dot(zmPars,np.dot(A,zmPars)) + np.dot(zmPars,B) + C
 
 		if returnParameters:
@@ -228,7 +296,8 @@ class massBin:
 		"""
 		if not self.hasZMP and self.nZero > 0:
 			raise RuntimeError("No zero mode parameters set")
-		self.setShapeParameters(pars)
+		if pars is not None:
+			self.setShapeParameters(pars)
 		a,b,c = self.getOwnTheoryABC()
 		A     = np.zeros((2*self.nFunc, 2*self.nFunc))
 		B     = np.zeros((2*self.nFunc))
@@ -243,7 +312,10 @@ class massBin:
 				B[i] += (a[2*self.nZero+i,j]+a[j,2*self.nZero+i])*self.zeroModeParameters[j]
 			for j in range(2*self.nFunc):
 				A[i,j] += a[2*self.nZero + i, 2*self.nZero+j]
-		couplings = -np.dot(B, la.pinv(np.transpose(A) + A))
+		if self.ownPinv:
+			couplings = -np.dot(B, utils.pinv(np.transpose(A) + A, numLim = self.numLim))
+		else:
+			couplings = -np.dot(B, la.pinv(np.transpose(A) + A))
 		return np.dot(couplings, np.dot(A,couplings)) + np.dot(B,couplings) + C
 
 	def getFcnCplsABC(self, zeroModePars):
@@ -269,7 +341,10 @@ class massBin:
 
 	def getFcnCpls(self, zeroModePars):
 		A,B,C = self.getFcnCplsABC(zeroModePars)
-		couplings = -np.dot(B, la.pinv(np.transpose(A) + A))
+		if self.ownPinv:
+			couplings = -np.dot(B, utils.pinv(np.transpose(A) + A, numLim = self.numLim))
+		else:
+			couplings = -np.dot(B, la.pinv(np.transpose(A) + A))
 		return couplings
 
 	def getNonShapeUncertainties(self, pars = []):
@@ -285,6 +360,31 @@ class massBin:
 		for i in range(len(A)):
 			unc.append(A[i,i]**-.5)
 		return unc
+
+	def getNonShapeParameters(self, pars = []):
+		"""
+		Gets the non-shape parameters at the minimum of chi2(...)
+		"""
+		if not self.chi2init:
+			raise RuntimeError("Chi2 not initialized, cannot evaluate")
+		if len(pars) > 0:
+			self.setShapeParameters(pars)
+		A,B,C = self.getOwnTheoryABC()
+		if self.ownPinv:
+			return  -np.dot(B, utils.pinv(A + np.transpose(A), numLim = self.numLim))
+		else:
+			return  -np.dot(B, la.pinv(A + np.transpose(A)))
+
+	def getChi2forNonShapeParameters(self,nonShapeParameters, shapePars = []):
+		"""
+		Gets the chi2 for a given set of non-shape parameters
+		"""
+		if not self.chi2init:
+			raise RuntimeError("Chi2 not initialized, cannot evaluate")
+		if len(shapePars) > 0:
+			self.setShapeParameters(shapePars)
+		A,B,C = self.getOwnTheoryABC()
+		return np.dot(nonShapeParameters, np.dot(A,nonShapeParameters)) + np.dot(B,nonShapeParameters) + C
 
 	def compareTwoZeroModeCorrections(self, params1, params2):
 		"""
@@ -383,6 +483,22 @@ class massBin:
 		"""
 		if mode in self.specialCOMAs:
 			return self.specialCOMAs[mode]
+		mapy = np.copy(self.coma) # coMA co PY
+		if self.hasMassRange:
+			zeroIndices = []
+			for s in range(self.nSect):
+				for i,b in enumerate(range(self.borders[s],self.borders[s+1])):
+					if s in self.massRanges:
+						binCenterMass = self.binCenters[b]
+						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
+							zeroIndices.append(b)
+			for i in range(len(mapy)):
+				for zi in zeroIndices:
+					mapy[i,2*zi  ] = 0.
+					mapy[i,2*zi+1] = 0.
+					mapy[2*zi  ,i] = 0.
+					mapy[2*zi+1,i] = 0.
+
 		jacobian = np.zeros((self.totalBins, 2*self.totalBins))
 		for i in range(self.totalBins):
 			if mode == INTENS:
@@ -400,7 +516,10 @@ class massBin:
 					common = 1. + im**2/re**2
 					jacobian[i,2*i  ] = -im/re**2/common
 					jacobian[i,2*i+1] = 1./re/common
-		retVal = utils.pinv(np.dot(jacobian, np.dot(self.coma, np.transpose(jacobian))), self.numLim)
+		if self.onwPinv:
+			retVal = utils.pinv(np.dot(jacobian, np.dot(mapy, np.transpose(jacobian))), numLim = self.numLim)
+		else:
+			retVal = la.pinv(np.dot(jacobian, np.dot(mapy, np.transpose(jacobian))))
 		self.specialCOMAs[mode] = retVal
 		return retVal
 
@@ -411,6 +530,9 @@ class massBin:
 		if not self.chi2init:
 			raise RuntimeError("chi2 not inited, no knowledge about shape parameters")
 		if not len(pars) == self.nPar:
+			print "GRAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+			print pars
+			print "GRAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 			raise ValueError("Number of shape parameters does not match len(pars) = " + str(len(pars)) + " != self.nPar = " + str(self.nPar))
 		countPar = 0
 		for s in range(self.nSect):
@@ -419,6 +541,23 @@ class massBin:
 			for f in self.funcs[s]:
 				f.setParameters(pars[countPar:countPar + f.nPar])
 				countPar += f.nPar
+
+	def eigenbasisChi2contributions(self, params):
+		"""
+		Gets the chi2-contributions in terms of eigenvectors of the covariance matrix
+		"""
+		count = 0
+		deltas = self.getCorrectedAmplitudes(params[:2*self.nZero])
+		self.setTheoryFromOwnFunctions(params[2*self.nZero:])
+		for i in range(self.totalBins):
+			deltas[2*i  ] -= self.theo[i].real
+			deltas[2*i+1] -= self.theo[i].imag
+		vals, vecs = la.eig(self.coma)
+		retVal = []
+		for i,val in enumerate(vals):
+			proj = np.dot(vecs.T[i], deltas)
+			retVal.append((val, proj))
+		return retVal		
 
 	def setZeroModeParameters(self, zmp):
 		"""
@@ -559,6 +698,7 @@ class massBin:
 		"""
 		Sets unity as covariance matrix
 		"""
+#	#	CMwrite("unifyComa")
 		for i in range(len(self.coma)):
 			for j in range(len(self.coma)):
 				if i == j and not self.coma[i,i] == 0.:
@@ -573,17 +713,46 @@ class massBin:
 		"""
 		Inverts the covariance matrix (To be able to change the inversion method globally)
 		"""
-		self.comaInv = utils.pinv(self.coma, self.numLim)
+#	Change here: Check sector range map an invert submatrix
+#
+#
+		mapy = np.copy(self.coma) # coMA co PY
+		if self.hasMassRange:
+			zeroIndices = []
+			for s in range(self.nSect):
+				for i,b in enumerate(range(self.borders[s],self.borders[s+1])):
+					if s in self.massRanges:
+						binCenterMass = self.binCenters[b]
+						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
+							zeroIndices.append(b)
+			for i in range(len(self.coma)):
+				for zi in zeroIndices:
+					mapy[i,2*zi  ] = 0.
+					mapy[i,2*zi+1] = 0.
+					mapy[2*zi  ,i] = 0.
+					mapy[2*zi+1,i] = 0.
+		if self.ownPinv:
+			self.comaInv = utils.pinv(mapy, numLim = self.numLim)
+		else:
+			self.comaInv = la.pinv(mapy)
+		
 
-	def removeAllCorrelations(self):
+	def removeAllCorrelations(self, removeReImCorrel = True):
 		"""
 		Removes ALL correlations from the covariance matrix
 		"""
-		print "Remove correlations"
-		for i in range(len(self.coma)):
-			for j in range(len(self.coma)):
+		dim = len(self.coma)/2
+#	#	CMwrite("removeAllCorrelations")
+		for i in range(dim):
+			for j in range(dim):
 				if not i == j:
-					self.coma[i,j] = 0.
+					self.coma[2*i  ,2*j  ] = 0.		
+					self.coma[2*i+1,2*j  ] = 0.
+					self.coma[2*i  ,2*j+1] = 0.
+					self.coma[2*i+1,2*j+1] = 0.
+				elif removeReImCorrel:
+					self.coma[2*i+1,2*j  ] = 0.
+					self.coma[2*i  ,2*j+1] = 0.
 		self.makeComaInv()
 		self.specialCOMAs = {}
 
@@ -591,27 +760,49 @@ class massBin:
 		"""
 		Removes the dorection of the zero-mode from the covariance matrix
 		"""
-		print 'Remove zm'
+#		print 'Remove zm'
+		if self.zeroModesRemovedFromComa:
+			print "DO NOT REMOVE ZER MODE A SECOND TIME"
+			return
+
+		self.zeroModesRemovedFromComa = True
 		if len(self.zeroModes) == 0:
 			return
 		dim = len(self.coma)
 		transformationMatrix = np.identity(dim)
+#	#	CMwrite("removeZeroModeFromComa")
 		for z in range(self.nZero):
 			for i in range(dim/2):
 				for j in range(dim/2):
 					transformationMatrix[2*i  ,2*j  ] -= self.zeroModes[z][i] * self.zeroModes[z][j]
 					transformationMatrix[2*i+1,2*j+1] -= self.zeroModes[z][i] * self.zeroModes[z][j]
-#		print self.coma
-#		print '-------------------------------------'
 		self.coma         = np.dot(transformationMatrix, np.dot(self.coma, transformationMatrix)) # no transpose needed, since transformationMatrix is symmetric
-#		print self.coma
-#		print '=========================================================='
-#		print '=========================================================='
-#		print '=========================================================='
 		self.makeComaInv()
 		self.specialCOMAs = {}
-		self.zeroModesRemovedFromComa = True
-#		self.zeroModeMultiplicationCheck()
+
+	def addComaValueForZeroMode(self, val, unitsOf = 'smallestComaValue'):
+		if not self.zeroModesRemovedFromComa:
+			raise RuntimeError("Call 'removeZeroModeFromComa()' first.")
+		if unitsOf == 'smallestComaValue':
+			vals, vecs = la.eig(self.coma)
+			minVal = float('inf')
+			for v in vals:
+				if not v < self.numLim:
+					minVal = min(v, minVal)
+			value = val * minVal
+		elif unitsOf == "one":
+			value = val
+		else:
+			raise ValueError("Unknown option unitsOf = '" + untisOf + "'")
+		dim = len(self.coma)
+#	#	CMwrite("addComaValueForZeroMode("+str(val)+', '+unitsof+')')
+		for z in range(self.nZero):
+			for i in range(dim/2):
+				for j in range(dim/2):
+					self.coma[2*i  ,2*j  ] += value* self.zeroModes[z][i] * self.zeroModes[z][j]
+					self.coma[2*i+1,2*j+1] += value* self.zeroModes[z][i] * self.zeroModes[z][j]
+		self.makeComaInv()
+		self.specialCOMAs = {}
 
 	def zeroModeMultiplicationCheck(self, coeff = 1.):
 		"""
@@ -645,10 +836,14 @@ class massBin:
 		Removes the direction of a global phase rotation from the covariance matrix
 		"""
 		print "Phase removed <---!"
-
+		if self.globalPhaseRemoved:
+			print "DO NOT REMOVE THE GLOBAL PHASE A SECOND TIME"
+			return 
+		self.globalPhaseRemoved = True
 		phaseDirection = self.getGlobalPhaseDirection()
 		dim = 2*self.totalBins
 		transformationMatrix = np.identity(dim)
+#	#	CMwrite("removeGlobalPhaseFromComa")
 		for i in range(dim):
 			for j in range(dim):
 				transformationMatrix[i,j] -= phaseDirection[i] * phaseDirection[j]
@@ -663,19 +858,20 @@ class massBin:
 		if self.hasMassRange:
 			raise RuntimeError("Cannot setMassRange(...) twice, since the COMA has to be cut")
 		self.massRanges   = self.toIntegerSectorMap(massRanges)
-		zeroIndices = []
-		for s in range(self.nSect):
-			for i,b in enumerate(range(self.borders[s],self.borders[s+1])):
-				if s in self.massRanges:
-					binCenterMass = self.binCenters[b]
-					if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
-						zeroIndices.append(b)
-		for i in range(len(self.coma)):
-			for zi in zeroIndices:
-				self.coma[i,2*zi  ] = 0.
-				self.coma[i,2*zi+1] = 0.
-				self.coma[2*zi  ,i] = 0.
-				self.coma[2*zi+1,i] = 0.
+#		zeroIndices = []
+#	#	CMwrite("setMassRanges("+str(massRanges)+')')
+	#	for s in range(self.nSect):
+	#		for i,b in enumerate(range(self.borders[s],self.borders[s+1])):
+	#			if s in self.massRanges:
+	#				binCenterMass = self.binCenters[b]
+	#				if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
+	#					zeroIndices.append(b)
+	#	for i in range(len(self.coma)):
+	#		for zi in zeroIndices:
+	#			self.coma[i,2*zi  ] = 0.
+	#			self.coma[i,2*zi+1] = 0.
+	#			self.coma[2*zi  ,i] = 0.
+	#			self.coma[2*zi+1,i] = 0.
 
 		self.hasMassRange = True
 		self.makeComaInv()
@@ -691,6 +887,7 @@ class massBin:
 			raise RuntimeError("Chi2 not inited, does not have own functions")
 		if not len(parameterList) == 2*self.nFunc:
 			raise ValueError("Number of parameters does not match "+ str(len(parameterList)) + ' ' + str(2*self.nFunc))
+
 		countFunc = 0
 		self.theo = np.zeros((self.totalBins), dtype = complex)
 		for s in range(self.nSect):
@@ -699,12 +896,10 @@ class massBin:
 			nFunc = self.nFuncs[s]
 			masses = self.binCenters[self.borders[s]:self.borders[s+1]]
 
-
 			ampl = np.zeros((len(masses)), dtype = complex)
 			for i,f in enumerate(self.funcs[s]):
 				cpl = parameterList[2*(i+countFunc)] + 1.j*parameterList[2*(i+countFunc)+1]
 				ampl += cpl * f(masses, externalKinematicVariables = [self.binCenter])
-
 			countFunc += nFunc
 			for i,b in enumerate(range(self.borders[s],self.borders[s+1])):
 				self.theo[b] = ampl[i]*self.norms[b]**.5
@@ -832,6 +1027,7 @@ class massBin:
 				ZP[2*z+1,2*bin+1] = self.zeroModes[z][bin]
 			for p in range(nPara):
 				ampl = parametrizations[p][count] * self.norms[bin]**.5
+	#			print ampl
 				ZP[2*(p+self.nZero)  ,2*bin  ] = - ampl.real # Minus sign from A + C_z Z - C_p P, plus sign from    Re = R*r - I*i
 				ZP[2*(p+self.nZero)+1,2*bin  ] =   ampl.imag # Minus sign from A + C_z Z - C_p P, second minus from Re = R*r - I*i
 				ZP[2*(p+self.nZero)  ,2*bin+1] = - ampl.imag # Minus sign from A + C_z Z - C_p P, plus sign from    Im = R*i + I*r
@@ -911,10 +1107,10 @@ class massBin:
 		"""
 		if not len(params) == 2*self.nZero + 2*len(funcs):
 			raise IndexError("Parameter size does not match")
-		binStart = self.borders[sector]
-		binStop  = self.borders[sector+1]
-		deltas   = np.zeros((2*self.totalBins))
-		count = 0
+		binStart  = self.borders[sector]
+		binStop   = self.borders[sector+1]
+		deltas    = np.zeros((2*self.totalBins))
+		count     = 0
 		corrected = self.getCorrectedAmplitudes(params[:2*self.nZero])
 		for bin in range(binStart, binStop):
 			deltas[2*bin  ] = corrected[2*bin  ]
@@ -1047,7 +1243,7 @@ class massBin:
 			newAmpl = ampl*(self.reals[i] + 1.j*self.imags[i])
 			self.reals[i] = newAmpl.real
 			self.imags[i] = newAmpl.imag
-
+#	#	CMwrite("removePhase")
 		jac = np.zeros((len(self.coma), len(self.coma)))
 		for i in range(len(self.coma)/2):
 			jac[2*i  ,2*i  ] =   re

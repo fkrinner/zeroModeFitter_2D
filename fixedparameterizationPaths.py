@@ -52,9 +52,15 @@ mappMerged = {
 
 
 def getFileNameForSector(sector, withBarrierFactors = False, merged = False):
+	if sector == "2-+0+[pi,pi]3--PiP":
+		print "Simplifying HACKKKKK"
+		return 	getFileNameForSector("3++0+[pi,pi]3--PiS", withBarrierFactors = withBarrierFactors, merged = merged)
 	if sector == "2-+1+[pi,pi]2++PiS":
+		print "Simplifying HACKKKKK"
 		return getFileNameForSector("2-+0+[pi,pi]2++PiS", withBarrierFactors = withBarrierFactors, merged = merged)
-
+	if sector in ["1-+1-[pi,pi]1--PiP","1++1-[pi,pi]1--PiS"]:
+		print "Simplifying HACKKKKK"
+		return getFileNameForSector("1-+1+[pi,pi]1--PiP", withBarrierFactors = withBarrierFactors, merged = merged)
 	if withBarrierFactors:
 		folder = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/zeroModes/bwAmplitudes"
 	else:

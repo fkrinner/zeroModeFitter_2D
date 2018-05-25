@@ -3,7 +3,7 @@ import numpy.linalg as la
 import os, sys 
 import pyRootPwa
 
-from math import pi, exp, log, atan
+from math import pi, exp, log, atan, isnan
 
 numLim = 1.E-10
 INF = float("inf")
@@ -93,18 +93,24 @@ def renormToBinWidth(hist, exponent = 1.):
 		binWidth = hist.GetYaxis().GetBinWidth(i+1)
 		for j in range(hist.GetNbinsX()):
 			hist.SetBinContent(j+1,i+1, hist.GetBinContent(j+1,i+1)/binWidth**exponent)
-			hist.SetBinError(j+1, i+1, hist.GetBinError(j+1, i+1)/binWidth**exponent)
+			hist.SetBinError(  j+1, i+1, hist.GetBinError( j+1,i+1)/binWidth**exponent)
 
 def pinv(matrix, numLim = 1.e-13):
 	"""
 	Own method fot the pseudo inverse of a matrix
 	"""	
 	dim = len(matrix)
+#	for i in range(dim):
+#		for j in range(dim):
+#			if isnan(matrix[i,j]):
+#				print matrix
+#				print i,j
+#				raise ValueError
 	val, vec = la.eig(matrix)
 	for i in range(dim):
 		if abs(val[i]) < numLim:
 			val[i] = 0.
-		elif val[i].real < -2.e-8:
+		elif val[i].real < numLim:
 			raise ValueError("Negative eingenvalue: " + str(val[i]))
 		else:
 			val[i] = 1./val[i]

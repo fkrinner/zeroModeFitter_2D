@@ -22,7 +22,84 @@ import modernplotting.toolkit
 import modernplotting.specialPlots as mpsp
 import studyPlotter
 
+from random import randint, random
+import scipy
+
 from LaTeX_strings import unCorrected_string, weightedAVG_string
+
+def doFunctionFit(inFileName, funcs, startBin, stopBin, tBins, sectorRangeMap, referenceWave = "", writeResultToFile = None, acv = None, zeroModeParameters = None, ifn = None):
+	sector  = "2-+0+[pi,pi]2++PiS"
+	sectors = ["2-+0+[pi,pi]0++PiD","2-+0+[pi,pi]1--PiP","2-+0+[pi,pi]1--PiF","2-+0+[pi,pi]2++PiS"]
+
+	print "La wave du reference e >>>",referenceWave,"<<<",sectorRangeMap
+	fitter = amplitudeAnalysis(inFileName, sectors, {sector:funcs}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
+	fitter.loadData(loadIntegrals = True, referenceWave = referenceWave)
+	fitter.finishModelSetup()
+	fitter.mode = AMPL
+
+	parameters = []
+	for f in funcs:
+		for p in f.returnParameters():
+			parameters.append(p)
+
+	fitter.initMinuitFunction(parameters)
+
+	fitter.removeZeroModeFromComa()
+	fitter.removeGlobalPhaseFromComa()
+
+
+	if acv is not None:
+		print "adding ACV of",acv
+		fitter.addComaValueForZeroMode(acv)
+
+	if ifn is None:
+		if zeroModeParameters is None:
+			fitter.fitShapeParameters()
+			fitter.calculateNonShapeParameters()
+			chi2 = fitter.chi2
+			ndf  = fitter.getNDFforMode()
+		else:
+			x,err,chi2,ndf = fitter.fitShapeParametersForBinRange([p.value for p in parameters], [0], range(stopBin-startBin), zeroModeParameters = zeroModeParameters)
+			fitter.calculateNonShapeParametersForZeroModeParameters(zeroModeParameters)
+			for i,p in enumerate(parameters):
+				print p
+		if writeResultToFile is not None:
+			with open(writeResultToFile, 'w') as outFile:
+				outFile.write("- - - - parameters - - - -\n")
+				for p in parameters:
+					outFile.write(str(p)+'\n')
+				outFile.write(" - - - - - fit - - - - -\nchi2/NDF: "+str(chi2)+"/"+str(ndf)+"="+str(chi2/ndf))
+	else:
+		params = []
+		errs   = []
+		with open(ifn, 'r' ) as inFile:
+			inPars = False
+			for line in inFile.readlines():
+				if "- - - - - fit - - - - -" in line:
+					break
+				elif inPars:
+					params.append(float(line.split()[2]))
+					errs.append(float(line.split()[4]))
+				elif "- - - - parameters - - - -" in line:
+					inPars = True
+		if not len(params) == len(parameters):
+			raise IndexError("Parameter size mismatch")
+		for i in range(len(params)):
+			parameters[i].value = params[i]
+			parameters[i].error = errs[i]
+		if zeroModeParameters is None:
+			raise ValueError
+		else:
+			fitter.setZeroModeParameters(zeroModeParameters)
+		fitter.model.setBinsToEvalueate([0], range(stopBin-startBin))
+		fitter.chi2 = fitter.model.fixedZMPchi2(params)
+		fitter.fitParameters = params
+		fitter.SET('hasFitResult')
+#		fitter.calculateNonShapeParametersForZeroModeParameters(zeroModeParameters)
+		fitter.calculateNonShapeParameters()
+		
+	return fitter
+
 def doF0Fit(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = "", deg = 0, writeResultToFile = None):
 	fixedAMPD_sub = pc.fixedParameterization("/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/zeroModes/bwAmplitudes_noBF/amp_2mp0pSigmaPiD")
 	f0Mass   = ptc.parameter(mF0,"f0Mass")
@@ -177,6 +254,7 @@ def fitF2prime(fitBin, outFileName, inFileName, startBin, stopBin, tBins, pars, 
 		while True:
 #			try:
 			if True:
+				f2PrimeFit.initMinuitFunction(f2PrimeFit.getParameters()[2:])
 				x,err,c2,ndf = f2PrimeFit.fitShapeParametersForBinRange([mF2prime+startValueOffset,GF2prime+startValueOffset], [0],[fitBin], zeroModeParameters = zeroModeParameters)
 				break
 #			except:
@@ -266,13 +344,13 @@ def main():
 #	style.p2dColorMap = 'ocean_r'
 #	style.p2dColorMap = 'YlOrRd'
 	style.p2dColorMap = 'Reds'
-	referenceWave = ""	
+#	referenceWave     = ""	
 
 	sectors          = ["2-+0+[pi,pi]0++PiD", "2-+0+[pi,pi]1--PiP", "2-+0+[pi,pi]1--PiF", "2-+0+[pi,pi]2++PiS"]
 	tBin = int(sys.argv[1])
 	if tBin < 0 or tBin > 3:
 		raise ValueError("Invalid t' bin: " + str(tBin))
-	if len(sys.argv) > 2:
+	if len(sys.argv) > 2 and False:
 		study = sys.argv[2]
 		studyAdder = "_"+study
 	else:
@@ -287,13 +365,13 @@ def main():
 	f2Range        = None
 	sectorRangeMap = {}
 
-	if not rhoRange:
+	if rhoRange is None:
 		rhoRangeString = ""
 	else:
 		sectorRangeMap["2-+0+[pi,pi]1--PiP"] = (0.,rhoRange)
 		sectorRangeMap["2-+0+[pi,pi]1--PiF"] = (0.,rhoRange)
 		rhoRangeString = "_range"+str(rhoRange)
-	if not f2Range:
+	if f2Range is None:
 		f2RangeString = ""
 	else:
 		sectorRangeMap["2-+0+[pi,pi]2++PiS"] = (0., f2Range)
@@ -302,14 +380,24 @@ def main():
 #	startBin         = 11
 #	stopBin          = 50
 
-	startBin         = 25
+	startBin         = 40
 	stopBin          = 50
+
+	ifn              = None
+	for a in sys.argv:
+		if a.startswith("mBins"):
+			startBin = int(a.split("-")[1])
+			stopBin  = int(a.split("-")[2])
+		if a.startswith("ifn="):
+			ifn = a[4:]
 
 	methodBinRanges = {
 	                   "fitF2"        : (22, 50),
 	                   "fitRhoF"      : (22, 50),
 	                   "fixedShapeF2" : (22, 50)}
 #	methodBinRanges = {} # Override here 
+
+
 
 	allMethods       = {}
 	methodStrings    = {}
@@ -326,12 +414,269 @@ def main():
 	                      "fitF2"             : r"$\text{fit}_{f_2}$",
 	                      "smooth"            : r"smooth"}
 
-	fit1500 = doFit1500(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "2mp_f0_1500_massesAndWidths_global.dat")
+
+#       # - - - - --- Start here with the model builting --- - - - - #       #
+
+	nPol       = 3
+	for a in sys.argv:
+		if a.startswith("nPol"):
+			nPol = int(a[4:])
+
+	f2Re0     = mF2**2
+	f2Im0     = mF2*GF2
+
+	mPrime = 1.55
+	Gprime =  .2
+
+	mPPrime = 1.91
+	Gpprime = .3
+
+
+	f2Mass    = ptc.parameter(mF2, "f2_mass")
+	f2Width   = ptc.parameter(GF2, "f2_width")
+	f2        = ptc.relativisticBreitWigner([f2Mass,f2Width], mPi, mPi, mPi, 2, 0, False)
+
+	poleReal   = ptc.parameter(f2Re0, "f2Re")
+	poleImag   = ptc.parameter(f2Im0, "f2Im")
+
+	pPoleReal = ptc.parameter(mPrime**2,      "f2pRe")
+	pPoleImag = ptc.parameter(mPrime*Gprime, "f2pIm")
+
+	ppPoleReal = ptc.parameter(mPPrime**2, "f2ppRe")
+	ppPoleImag = ptc.parameter(mPPrime*Gpprime, "f2ppIm")
+
+
+#	poleRealPrime = ptc.parameter(mPrime**2, "rhoRePrime")
+#	poleImagPrime = ptc.parameter(mPrime*Gprime, "rhoImPrime")
+
+	seedint = randint(0,10000)
+
+	polyDeg_po = 3
+	for a in sys.argv:
+		if a.startswith("pdpo"):
+			polyDeg_po = int(a[4:])
+	
+	params     = [poleReal,poleImag,pPoleReal,pPoleImag,ppPoleReal,ppPoleImag]
+	params     = params[:2*nPol]
+
+	for d in range(polyDeg_po):
+		params.append(ptc.parameter(2*random()-1., "c_"+str(d)))
+	Kmatrix    = ptc.simpleOneChannelKmatrix(params, nPol, polyDeg_po, 4*mPi**2)
+	useCM      = False
+	for a in sys.argv:
+		if a == "CM":
+			useCM = True
+		if a == "rho":
+			useCM = False
+
+	Kmatrix.use_CM = useCM
+
+	pPolyDeg3  = 2
+	pPolyDeg2  = 5
+	for a in sys.argv:
+		if a.startswith("m3pol"):
+			pPolyDeg3 = int(a[5:])
+		if a.startswith("m2pol"):
+			pPolyDeg2 = int(a[5:])
+
+
+	params     = []
+	for d in range(pPolyDeg2):
+		for e in range(pPolyDeg3+1):
+			params.append(ptc.parameter(2*random()-1., "c_"+str(d+1)+"_"+str(e)))
+	pPoly      = ptc.twoDimensionalRealPolynomial(pPolyDeg2, pPolyDeg3, params, baseExponent = 2) # baseExponent = 2: polynomial in s
+	func       = ptc.multiply([Kmatrix, pPoly])	
+
+	model      = [func]
+#	model      = [rho]
+
+	acv = None
+
+#       # - - - - --- Stop the model building here --- - - - - #       #
+	zeroModeParameters = None
+	fixZeroMode        = True
+#	print sectorRangeMap
+#	return 
+	if fixZeroMode:
+		fixSectors = ["2-+0+[pi,pi]1--PiP", "2-+0+[pi,pi]1--PiF", "2-+0+[pi,pi]2++PiS"]
+		fixRangeMap = {
+			"2-+0+[pi,pi]1--PiP" : (0.,1.12), 
+			"2-+0+[pi,pi]1--PiF" : (0.,1.12), 
+			"2-+0+[pi,pi]2++PiS" : (0.,1.27) # Use only left side of f_2(1270)
+		}
+
+		fixedShapes        = doFixedShapes(inFileName, fixSectors, startBin, stopBin, tBins, referenceWave = referenceWave, sectorRangeMap = fixRangeMap)
+		zeroModeParameters = fixedShapes.getZeroModeParametersForMode()
+
+#		RV = fixedShapes.produceResultViewer(zeroModeParameters,"1-+1+[pi,pi]1--PiP", noRun = True, plotTheory = True)
+#		RV.plotData = True
+#		for b in range(startBin, stopBin):
+#			plotNameBase = "./Kmatrix_plots/1mp1p1mmPiP_<mode>_"+str(b)+"_"+str(tBin)+".pdf"
+#			RV.writeBinToPdf(b, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
+#		return
+	if useCM:
+		ps = "CM"
+	else:
+		ps = "rho"
+	if rhoRange is None:
+		rrs = ""
+	else:
+		rrs = "range"+str(rhoRange)+'_'
+	if nPol == 1:
+		nps = ""
+	else:
+		nps = "nPol"+str(nPol)+"_"
+
+	resultFile  =  "./KmatrixRestrictedZMfixing_allFourSectorsActive/2mpF2_Kmatrix_"+rrs+nps+ps+"_kPol"+str(polyDeg_po-1)+"_pPol"+str(pPolyDeg3)+"-"+str(pPolyDeg2)+"_t"+str(tBin)+"_m"+str(startBin)+'-'+str(stopBin)+'_'+str(seedint)+".dat"
+	fitter      = doFunctionFit(inFileName, model, startBin, stopBin, tBins, sectorRangeMap, referenceWave = referenceWave, acv = acv, zeroModeParameters = zeroModeParameters, writeResultToFile = resultFile, ifn = ifn)
+
+#       # - - - - --- Start the evaluations here --- - - - - #       #
+	nBinsPlot = 1000
+	def fPlot(v):
+		return v.imag
+#	hist = pyRootPwa.ROOT.TH2D("hhh","hhh", nBinsPlot, -.25, 6.25,nBinsPlot, -1., 1.)
+#	for iX in range(nBinsPlot):
+#		x = hist.GetXaxis().GetBinCenter(iX+1)
+#		for iY in range(nBinsPlot):
+#			y = hist.GetYaxis().GetBinCenter(iY+1)			
+#			s = x+1.j*y
+#			val = Kmatrix.complexCall(s)
+#			hist.SetBinContent(iX+1, iY+1,fPlot(val))
+#	hist.Draw("COLZ")
+#	raw_input("press <enter> to go to the secont sheet")
+	Kmatrix.secondSheet = True
+#	for iX in range(nBinsPlot):
+#		x = hist.GetXaxis().GetBinCenter(iX+1)
+#		for iY in range(nBinsPlot):
+#			y = hist.GetYaxis().GetBinCenter(iY+1)			
+#			s = x+1.j*y
+#			val = Kmatrix.complexCall(s)
+#			hist.SetBinContent(iX+1, iY+1, fPlot(val))
+#	hist.Draw("COLZ")
+	res = scipy.optimize.minimize(Kmatrix.absInverse,[f2Re0,f2Im0])
+	print res.x,"pole position"
+	mfv = res.fun
+	resSting = str(res.fun)+ " function value should be zero"
+	print resSting
+	BWstring = "BW par: "+str(abs(res.x[0])**.5)+" "+str(abs(res.x[1])/abs(res.x[0])**.5)+" (all absolute values)"
+	print BWstring
+
+	if ifn is None:
+		print "= = = = = = = = = Starting BW error ersimation = = = = = = = = = "
+		nPoints     = 1000
+		poleMean    = res.x
+		poleSamples = []
+		i           = 0
+		failCount   = 0
+		while i < nPoints:
+			pts = np.random.multivariate_normal(fitter.fitParameters, fitter.MINUITcoma)
+			fitter.MINUIT_function(pts) # Call the function once to set parameters inside
+	#		fitter.model[0].setParametersAndErrors(pts, fitter.MINUITerrs)
+			res = scipy.optimize.minimize(Kmatrix.absInverse,poleMean)
+			if abs(res.fun) > 100*mfv:
+				print "No more pole found (mfv = "+str(mfv)+") : fval = "+str(res.fun)
+				failCount += 1
+				if failCount > nPoints:
+					print "Failed to find poles too often.... abort"
+					return
+				continue
+	#			raise ValueError("No more pole found: fval = "+str(res.fun))
+
+			poleSamples.append(res.x)
+			i+=1
+	#		print i,"Marker to find the PRINT 57473M3N7"
+		meanPole = [0.,0.]
+		for p in poleSamples:
+			meanPole[0] += p[0]
+			meanPole[1] += p[1]
+		meanPole[0] /= len(poleSamples)
+		meanPole[1] /= len(poleSamples)
+		poleComa = [[0.,0.],[0.,0.]]
+		for p in poleSamples:
+			poleComa[0][0] += (p[0]-meanPole[0])**2
+			poleComa[0][1] += (p[0]-meanPole[0])*(p[1]-meanPole[1])
+			poleComa[1][0] += (p[1]-meanPole[1])*(p[0]-meanPole[0])
+			poleComa[1][1] += (p[1]-meanPole[1])**2
+		poleComa[0][0] /= len(poleSamples)-1
+		poleComa[0][1] /= len(poleSamples)-1
+		poleComa[1][0] /= len(poleSamples)-1
+		poleComa[1][1] /= len(poleSamples)-1
+		comaString      = str(poleComa)
+		print " - - - - - - le compaire pramaitre  - - - - - - "
+		print meanPole, poleMean
+		print " - - - - - - le compaire pramaitre  - - - - - - "
+		print poleComa
+		print "= = = = = = = = = Finished BW error ersimation = = = = = = = = = "
+		mF2P = 1.9
+		GF2P =  .277
+		res  = scipy.optimize.minimize(Kmatrix.absInverse,[mF2P**2,mF2P*GF2P])
+		print res.x,"pole position"
+		resSting = str(res.fun)+ " function value should be zero"
+		print resSting
+		BWstring = "BW' par: "+str(abs(res.x[0])**.5)+" "+str(abs(res.x[1])/abs(res.x[0])**.5)+" (all absolute values)"
+		print BWstring
+		with open(resultFile,'a') as outFile:
+			outFile.write('\n'+BWstring+" "+resSting+"\ncoma "+comaString)
+	#		outFile.write('\n'+BWfitString)
+	#       # - - - - --- Start the evaluations here --- - - - - #       #
+		doPlots = False
+		for a in sys.argv:
+			if a == "plot":
+				doPlots = True
+	if ifn is not None:
+		doPlots = True # Set plots by default, if an inFile is given
+
+	if doPlots:
+		RV = fitter.produceResultViewer(zeroModeParameters,"2-+0+[pi,pi]2++PiS", noRun = True, plotTheory = True)
+		RV.plotData = True
+		for b in range(startBin, stopBin):
+			plotNameBase = "./Kmatrix_plots/2mp0p2ppPiS_<mode>_"+str(b)+"_"+str(tBin)+"_"+str(seedint)+".pdf"
+			RV.writeBinToPdf(b, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
+#	raw_input("press <enter> to exit")
+	return
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+
+
+#	fit1500 = doFit1500(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "2mp_f0_1500_massesAndWidths_global.dat")
 
 	print "Start with fixed shape f0"
 	fixedShapeF0 = doFixedShapes(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave)
 	allMethods["fixedShapeF0"] = fixedShapeF0
 	print "Finished with fixed shape f0"
+
+
+#	fixedShapeAllButF0 = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins, referenceWave = referenceWave)
+#	hists = fixedShapeAllButF0.makeTheoryTotals()
+#	with root_open("theo_hists_2mp0p_t"+str(tBin)+".root", "RECREATE"):
+#		for tb in hists:
+#			for h in tb:
+#				h.Write()
+#	return
 
 #	print "Start with fixed shape rhoP"
 #	fixedShapeRhoP = doFixedShapes(inFileName, [sectors[1]], startBin, stopBin, tBins, referenceWave = referenceWave)
@@ -433,6 +778,8 @@ def main():
 	style.titleRight = r"$2^{-+}0^+$"
 	style.titleLeft  = LaTeX_strings.tBins[tBin]
 
+#	fixedShapesRhosAndF2 = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins, referenceWave = referenceWave)
+
 #	with  modernplotting.toolkit.PdfWriter("compositions_2mp_"+str(tBin)+studyAdder+".pdf") as pdfOutput:
 #		plot = style.getPlot1D()
 #		for m in studyList:
@@ -465,28 +812,28 @@ def main():
 		axolotl.append(shortlabels[study])
 #		axolotl.append(alphabet[i])
 
-	with modernplotting.toolkit.PdfWriter("studies_2mp_"+str(tBin)+studyAdder+".pdf") as pdfOutput:
-		plot = style.getPlot2D()
-		plot.axes.get_xaxis().set_ticks([(i + 0.5) for i in range(len(studyList)+2)])
-		plot.axes.get_yaxis().set_ticks([(i + 0.5) for i in range(len(studyList))])
-		studyPlotter.makeValuePlot(plot, hist)
+#	with modernplotting.toolkit.PdfWriter("studies_2mp_"+str(tBin)+studyAdder+".pdf") as pdfOutput:
+#		plot = style.getPlot2D()
+#		plot.axes.get_xaxis().set_ticks([(i + 0.5) for i in range(len(studyList)+2)])
+#		plot.axes.get_yaxis().set_ticks([(i + 0.5) for i in range(len(studyList))])
+#		studyPlotter.makeValuePlot(plot, hist)
 		
-		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(unCorrected_string)
-		axolotl.append(weightedAVG_string)
-		plot.axes.set_xticklabels(axolotl, rotation = 90)
-		plot.setZlim((0.,1.))
+#		plot.axes.set_yticklabels(axolotl)
+#		axolotl.append(unCorrected_string)
+#		axolotl.append(weightedAVG_string)
+#		plot.axes.set_xticklabels(axolotl, rotation = 90)
+#		plot.setZlim((0.,1.))
 
-		pdfOutput.savefigAndClose()
+#		pdfOutput.savefigAndClose()
 
-	with open("studies_2mp_"+str(tBin)+studyAdder+".txt",'w') as out:
-		for axl in axolotl:
-			out.write(axl + ' ')
-		out.write("\n")
-		for i in range(hist.GetNbinsX()):
-			for j in range(hist.GetNbinsY()):
-				out.write(str(hist.GetBinContent(i+1, j+1)) + ' ')
-			out.write('\n')
+#	with open("studies_2mp_"+str(tBin)+studyAdder+".txt",'w') as out:
+#		for axl in axolotl:
+#			out.write(axl + ' ')
+#		out.write("\n")
+#		for i in range(hist.GetNbinsX()):
+#			for j in range(hist.GetNbinsY()):
+#				out.write(str(hist.GetBinContent(i+1, j+1)) + ' ')
+#			out.write('\n')
 
 	doF0fitGlobal = False
 	if doF0fitGlobal:
@@ -515,7 +862,7 @@ def main():
 	doRhoPfits    = False
 	doRhoFfits    = False
 	doF2Fits      = True
-	doF2primeFits = False
+	doF2primeFits = True
 
 	if doF2primeFits and not doF2Fits:
 		raise RuntimeError("f2' fits only after f2 fits possible")
@@ -661,19 +1008,20 @@ def main():
 				startValueOffset = 0.01
 				exceptCount      = 0
 				while True:
-					try:
-#					if True:
+#					try:
+					if True:
+						fitF2.initMinuitFunction(fitF2.getParameters())
 						x,err,c2,ndf = fitF2.fitShapeParametersForBinRange([mF2+startValueOffset,GF2+startValueOffset], [0],[i], zeroModeParameters = resolvedWA)
 						break
-					except:
-						print "Fitter exception encountered"
-						startValueOffset += 0.001
-						exceptCount      += 1	
-						if exceptCount > 3:
-							print "Too many failed attempts in bin "+str(i)+": "+str(exceptCount)
-#							raise Exception
-							x, err = [0.,0.],[0.,0.]
-							break
+#					except:
+#						print "Fitter exception encountered"
+#						startValueOffset += 0.001
+#						exceptCount      += 1	
+#						if exceptCount > 3:
+#							print "Too many failed attempts in bin "+str(i)+": "+str(exceptCount)
+##							raise Exception
+#							x, err = [0.,0.],[0.,0.]
+#							break
 
 				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
 				outFile.write(' ' + str(c2/ndf)+'\n')

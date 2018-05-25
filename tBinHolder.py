@@ -27,6 +27,22 @@ class tBinHolder:
 #		print ">>>",chi2,"<<<"
 		return chi2
 
+	def addComaValueForZeroMode(self, val, unitsOf = 'smallestComaValue'):
+		"""
+		Simple t' bin loop of the 'addComaValueForZeroMode(...)' method
+		"""
+		for tb in self.bins:
+			tb.addComaValueForZeroMode(val, unitsOf = unitsOf)
+
+	def getTheoryTotalMatrices(self,binRange = None):
+		"""
+		Simple t' bin loop
+		"""
+		retVals = []
+		for tb in self.bins:
+			retVals.append(tb.getTheoryTotalMatrices(binRange = binRange))
+		return retVals
+
 	def compareTwoZeroModeCorrections(self, params1, params2):
 		"""
 		Compares two different corrections of the zero-modes

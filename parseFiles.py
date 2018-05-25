@@ -1,7 +1,7 @@
 import pyRootPwa
 import numpy as np
 
-def parseTH1D(fileName, fakk = 1.):
+def parseTH1D(fileName, fakk = 1., addX = None):
 	binning = []
 	vals    = []
 	errs    = []
@@ -14,8 +14,12 @@ def parseTH1D(fileName, fakk = 1.):
 				binning.append(parsed[0])
 			else:
 				if not parsed[0] == binning[-1]:
-					raise ValueError("Binning is not continuous")
+					raise ValueError("Binning is not contiguous")
 			binning.append(parsed[1])
+	if addX is not None:
+		for i in range(len(binning)):
+			binning[i] += addX
+
 	binning = np.asarray(binning, dtype = np.float64)
 	hist    = pyRootPwa.ROOT.TH1D('hist', 'hist', len(binning)-1, binning)
 	for i in range(len(vals)):
@@ -28,6 +32,7 @@ def parseArgand(fileName, skipZero = False, fakk = 1.):
 	EX = []
 	Y  = []
 	EY = []
+
 	with open(fileName, 'r') as inin:
 		for line in inin.readlines():
 			parsed = [float(v) for v in line.split()]

@@ -15,8 +15,8 @@ Pr0  = 0.1973
 mRhoPrime = 1.465
 GrhoPrime =  .400
 
-mF2prime = 1.525
-GF2prime =  .073
+mF2prime = 1.91
+GF2prime =  .2
 
 mF0 = 0.965
 g1  = 0.165

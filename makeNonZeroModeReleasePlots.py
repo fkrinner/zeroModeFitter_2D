@@ -11,7 +11,7 @@ import sys
 import pyRootPwa
 import numpy as np
 
-from rootfabi      import root_open
+from rootfabi import root_open
 import LaTeX_strings
 
 import consistencyUtils as cu
@@ -24,43 +24,64 @@ import modernplotting.specialPlots as mpsp
 import studyPlotter
 from globalDefinitions import mPi, mK, mRho, Grho, mRhoPrime, GrhoPrime, mF0, g1, g2, mF2, GF2, Pr0
 from globalDefinitions import referenceWave as globalReferenceWave
+from fixedparameterizationPaths import getFileNameForSector
 
-def getRhoModel(inFileName, sector, startBin, stopBin, tBins, sectorRangeMap,  L, referenceWave = "", writeResultToFile = None, loadIntegrals = False):
-	rhoMass  = ptc.parameter( mRho-.1,  "rhoMass" )
-	rhoWidth = ptc.parameter( Grho+.1 , "rhoWidth")
-	rho = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, L, False)
+def getRhoModel(inFileName, sector, startBin, stopBin, tBins, sectorRangeMap,  L, referenceWave = "", writeResultToFile = None, loadIntegrals = False, fit = True):
+	if fit:
+		rhoMass  = ptc.parameter( mRho-.1,  "rhoMass" )
+		rhoWidth = ptc.parameter( Grho+.1 , "rhoWidth")
+		rho      = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, L, False)
+	else:
+#		fn   = getFileNameForSector(sector, False, False)[0]
+#		rho  = pc.fixedParameterization(fn, polynomialDegree  = 0, complexPolynomial = False)
+
+		rhoMass  = ptc.parameter( mRho,  "rhoMass" )
+		rhoWidth = ptc.parameter( Grho, "rhoWidth")
+		rhoMass.lock  = True
+		rhoWidth.lock = True
+		rho      = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, L, False)
+
 	fitRho = amplitudeAnalysis(inFileName, [sector], {sector:[rho]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
 	fitRho.loadData(referenceWave = referenceWave, loadIntegrals = loadIntegrals)
 	fitRho.finishModelSetup()
 	fitRho.fitShapeParameters()
 	fitRho.mode = AMPL
-	if writeResultToFile:
+	if writeResultToFile and fit:
 		with open(writeResultToFile, 'a') as outFile:
 			if len(tBins) > 1:
 				raise ValueError("More than one t' bin not supported")
 			resultString = str(tBins[0])+ " 666. " + str(rhoMass.value) + ' ' + str(rhoMass.error) + ' ' + str(rhoWidth.value) + ' ' + str(rhoWidth.error) + "\n"
-			outFile.write(resultString)		
+			outFile.write(resultString)
 	return fitRho
 
+def getF2Model(inFileName, sector, startBin, stopBin, tBins, sectorRangeMap, L, referenceWave = "", writeResultToFile = None, loadIntegrals = False, fit = True):
+	if fit:
+		f2Mass  = ptc.parameter( mF2, "f2Mass" )
+		f2Width = ptc.parameter( GF2, "f2Width")
+		f2 = ptc.relativisticBreitWigner([f2Mass,f2Width], mPi, mPi, mPi, 2, L, False)
+	else:
+#		fn = getFileNameForSector(sector, False, False)[0]
+#		f2 = pc.fixedParameterization(fn, polynomialDegree = 0, complexPolynomial = False)
 
-def getF2Model(inFileName, sector, startBin, stopBin, tBins, sectorRangeMap,  L, referenceWave = "", writeResultToFile = None, loadIntegrals = False):
-	print 'sector', sector,'has L =',L
-        f2Mass  = ptc.parameter( mF2,  "f2Mass" )
-        f2Width = ptc.parameter( GF2 , "f2Width")
-        f2 = ptc.relativisticBreitWigner([f2Mass,f2Width], mPi, mPi, mPi, 2, L, False)
-        fitF2 = amplitudeAnalysis(inFileName, [sector], {sector:[f2]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
-        fitF2.loadData(referenceWave = referenceWave, loadIntegrals = loadIntegrals)
-        fitF2.finishModelSetup()
-        fitF2.fitShapeParameters()
-        fitF2.mode = AMPL
-	if writeResultToFile:
+		f2Mass  = ptc.parameter( mF2, "f2Mass" )
+		f2Width = ptc.parameter( GF2, "f2Width")
+		f2Mass.lock  = True
+		f2Width.lock = True
+#		f2 = ptc.relativisticBreitWigner([f2Mass,f2Width], mPi, mPi, mPi, 0, 0, False)
+		f2 = ptc.relativisticBreitWigner([f2Mass,f2Width], mPi, mPi, mPi, 2, L, False)
+
+	fitF2 = amplitudeAnalysis(inFileName, [sector], {sector:[f2]}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
+	fitF2.loadData(referenceWave = referenceWave, loadIntegrals = loadIntegrals)
+	fitF2.finishModelSetup()
+	fitF2.fitShapeParameters()
+	fitF2.mode = AMPL
+	if writeResultToFile and fit:
 		with open(writeResultToFile, 'a') as outFile:
 			if len(tBins) > 1:
 				raise ValueError("More than one t' bin not supported")
 			resultString = str(tBins[0])+ " 666. " + str(f2Mass.value) + ' ' + str(f2Mass.error) + ' ' + str(f2Width.value) + ' ' + str(f2Width.error) + "\n"
 			outFile.write(resultString)
-        return fitF2
-	
+	return fitF2
 
 def main():
 	checkLaTeX()
@@ -90,17 +111,20 @@ def main():
 
 	intensNames            = []
 	argandNames            = []
-	Xcheck                 = False
+	Xcheck                 = True
+	fit                    = False
 
 #	sect                   = '1++1+'
 #	sect                   = '2-+1+'
 #	sect                   = '2++1+'
-	startBin               = 11
+	startBin               = 0
 	stopBin                = 50
+#	startBin = 31
+#	stopBin  = 33
 	isRho                  = True
 	sectorRangeMap         = {}
 	isobName               = "rho"
-	writBins               = None
+	writeBins              = None
 	labelPoints            = {0:[],1:[],2:[],3:[]}
 	shiftMap               = {0:{},
 	                          1:{},
@@ -108,12 +132,22 @@ def main():
 	                          3:{}}
 	tickMap                = {}
 	intensFakk             = {0:1., 1:1., 2:1., 3:1.}
+	fileSectorName         = None
+	scaleArgandZeroLine    = 1.
 	if sect == '1++1+':
 		sector         = "1++1+[pi,pi]1--PiS"
 		L              = 0
+		if Xcheck and study == "3pp":
+			intensBaseName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/3ppIntenses/1pp1p1mm_m<mBin>_t"+str(tBin)+".intens"
+			argandBaseName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/dimasEllipses/1pp1p1mm_from3pp_<mBin>_"+str(tBin)+"_<>.argand"
+
 	if sect == '2-+1+':
 		sector         = "2-+1+[pi,pi]1--PiP"
 		L              = 1
+		if Xcheck and study == "3pp":
+			intensBaseName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/3ppIntenses/2mp1p1mm_m<mBin>_t"+str(tBin)+".intens"
+			argandBaseName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/dimasEllipses/2mp1p1mm_from3pp_<mBin>_"+str(tBin)+"_<>.argand"
+
 	if sect == '2-+1+2++':
 		sector         = "2-+1+[pi,pi]2++PiS"
 		L              = 0
@@ -123,6 +157,10 @@ def main():
 	if sect == '2++1+':
 		sector         = "2++1+[pi,pi]1--PiD"
 		L              = 2
+		if Xcheck and study == "3pp":
+			intensBaseName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/3ppIntenses/2pp1p1mm_m<mBin>_t"+str(tBin)+".intens"
+			argandBaseName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/dimasEllipses/2pp1p1mm_from3pp_<mBin>_"+str(tBin)+"_<>.argand"
+
 	if sect == "2++1+2++":
 		sector         = "2++1+[pi,pi]2++PiP"
 		L              = 1
@@ -135,51 +173,78 @@ def main():
 		writeBins      = [36]
 		labelPoints    = {0:[10, 15, 20], 1:[10, 15, 21], 2:[10, 15, 20], 3:[10, 15, 20]}
 		shiftMap       = {0:{10:(5*20.,0.), 15: (5*-50., 0.), 20: (0., 5*-40.)},
-		                  1:{10:(0., 2.*1000.**.5), 15:(0.1*1000., 0.), 21: (0., -150.)},
-		                  2:{10:(55.,0.),15:(-220.,50.),20:(0.,50.)},
+		                  1:{10:(0., 1.8*1000.**.5), 15:(0.05*1000., 0.), 21: (0., -120.)},
+		                  2:{10:(55.,0.),15:(-180.,50.),20:(0.,50.)},
 		                  3:{10:(0.,50.),15:(80.,0.),20:(0.,50.)}}
-		intensFakk     = {0:1.05, 1:1.1, 2:1., 3:1.1}
+		intensFakk     = {0:1.05, 1:1.1, 2:1.1, 3:1.1}
+		fileSectorName = "4pp1p1mmG"
 #		sectorRangeMap = {'4++1+[pi,pi]1--PiG':(0., 1.2)}
 		if Xcheck:
-			intensNames    = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/4pp1p1mm_t0.intens"]
-			argandNames    = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/4pp1p1mm_t0.argand"]
+			b = writeBins[0]
+			intensBaseName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/4pp1p1mm_t"+str(tBin)+".intens"
+			argandBaseName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/dimasEllipses/4pp1p1mm_<mBin>_"+str(tBin)+"_<>.argand"
+
+#			intensNames = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/4pp1p1mm_t"+str(tBin)+"_theo.intens"]
+#			argandNames = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/4pp1p1mm_t"+str(tBin)+"_theo.argand"]
+
 	if sect == '4++1+2++':
 		sector         = '4++1+[pi,pi]2++PiF'
 		L              = 3
-		isRho          = False	
+		isRho          = False
 		writeBins      = [36]
 		labelPoints    = {0:[25, 30], 1:[ 25, 30], 2:[25, 30], 3:[25, 30]}
 		shiftMap       = {0:{25:(50.,0.), 30:(-130.,0.)},
-		                  1:{25:(0.,25.), 30:(-150., 0.)},
+		                  1:{25:(0.,25.), 30:(-120., 0.)},
 		                  2:{25:(0.,-60.), 30:(0., 60.)},
-		                  3:{25:(0.,-80.), 30:(40., 0.)}}
+		                  3:{25:(0.,-90.), 30:(40., 0.)}}
+		fileSectorName = "4pp1p2ppF"
 		tickMap[1]     = ([-400, -200, 0, 200], [0., 200., 400., 600.])
 #		startBin       = 22
 		isobName       = "f2"
+		intensFakk     = {0:1.05, 1:1.05, 2:1., 3:1.05}
 		if Xcheck:
-			intensNames    = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/4pp1p2pp_t0.intens"]
-			argandNames    = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/4pp1p2pp_t0.argand"]
+			b = writeBins[0]
+			intensBaseName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/4pp1p2pp_t"+str(tBin)+".intens"
+			argandBaseName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/dimasEllipses/4pp1p2pp_<mBin>_"+str(tBin)+"_<>.argand"
+
+#			intensNames = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/4pp1p2pp_t"+str(tBin)+"_theo.intens"]
+#			argandNames = ["/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/4pp1p2pp_t"+str(tBin)+"_theo.argand"]
+
 	if sect == "3++0+":
 		sector         = "3++0+[pi,pi]2++PiP"
 		L              = 1
 		isRho          = False
 		writeBins      = [34]
-		labelPoints    = {0:[25, 30], 1:[ 25, 30], 2:[25, 30], 3:[25, 30]}
-		shiftMap       = {0:{25:(15.,15.), 30:( 50.,-40.)},
-		                  1:{25:(10.,10.), 30:( 10., 10.)},
-		                  2:{25:(15.,15.), 30:(-90., 40.)},
-		                  3:{25:(10.,10.), 30:( 10., 10.)}}
+		labelPoints    = {0:[20,25, 30], 1:[20, 25, 30], 2:[20, 25, 30], 3:[20,25, 30]}
+		shiftMap       = {0:{20:(15.,-100.), 25:(15.,15.), 30:( 50.,-40.)},
+		                  1:{20:(15.,-100.),25:(10.,10.), 30:( 10., 10.)},
+		                  2:{20:(15.,-100.),25:(15.,15.), 30:(-90., 40.)},
+		                  3:{20:(10.,-10.),25:(10.,10.), 30:( 10., 10.)}}
 #		startBin       = 22
+		fileSectorName = "3pp0p2ppP"
 		intensFakk     = {0:1.1, 1:1.1, 2:1.1, 3:1.2}
 		isobName       = "f2"
-	if sect == "4-+0+":
-		sector         = "4-+0+[pi,pi]1--PiF"
-		referenceWave  = "6-+0+rhoPiH"
-		L              = 3
-	if sect == "6-+0+":
-		sector         = "6-+0+[pi,pi]1--PiH"
-		L              = 5
+		if tBin in [0,1,2]:
+			scaleArgandZeroLine = 0.85
+		if Xcheck:
+			writeBins   = range(startBin,stopBin)
+			labelPoints = {}
+			intensfakk  = {}
+			shiftMap    = {}
+			b = 34
+			intensBaseName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/3ppIntenses/3pp0p2pp_m<mBin>_t"+str(tBin)+".intens"
+			argandBaseName = "/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/singlePlots/dimasEllipses/3pp0p2pp_<mBin>_"+str(tBin)+"_<>.argand"
 
+	if sect == "4-+0+":
+		sector        = "4-+0+[pi,pi]1--PiF"
+		referenceWave = "6-+0+rhoPiH"
+		L             = 3
+	if sect == "6-+0+":
+		sector        = "6-+0+[pi,pi]1--PiH"
+		L             = 5
+
+	if fileSectorName is None:
+		fileSectorName = sector
 
 
 	inFileName    = fileNameMap[study]
@@ -203,10 +268,10 @@ def main():
 
 	if isRho:
 		print "Fit is rho"
-		model = getRhoModel(inFileName, sector, startBin, stopBin, tBins, sectorRangeMap, L = L, writeResultToFile = "rhoMassesAndWidths_"+sect+"_global.dat", referenceWave = referenceWave, loadIntegrals = True)
+		model = getRhoModel(inFileName, sector, startBin, stopBin, tBins, sectorRangeMap, L = L, writeResultToFile = "rhoMassesAndWidths_"+sect+"_global.dat", referenceWave = referenceWave, loadIntegrals = True, fit = fit)
 	else:
 		print "Fit is f2"
-		model = getF2Model(inFileName, sector, startBin, stopBin, tBins, sectorRangeMap, L = L, writeResultToFile = "f2MassesAndWidths_"+sect+"_global.dat", referenceWave = referenceWave, loadIntegrals = True)
+		model = getF2Model(inFileName, sector, startBin, stopBin, tBins, sectorRangeMap, L = L, writeResultToFile = "f2MassesAndWidths_"+sect+"_global.dat", referenceWave = referenceWave, loadIntegrals = True, fit = fit)
 ##### Writing starts here
 	print "From",startBin,'to',stopBin
 
@@ -244,7 +309,7 @@ def main():
 					except:
 						print "Fitter exception encountered"
 						startValueOffset += 0.001
-						exceptCount      += 1	
+						exceptCount      += 1
 						if exceptCount > 3:
 							raise Exception("Too many failed attempts: "+str(exceptCount))
 				if sect == "3++0+":
@@ -261,7 +326,7 @@ def main():
 					rv = model.produceResultViewer(parameterDummy,sector, noRun = True, plotTheory = True)
 					rv.writeBinToPdf(nBin, stdCmd = ["",folder +  "/"+isobName+"Shape_"+sector+"_intens_"+str(nBin)+"_"+str(tBin)+".pdf", [], folder +  "/"+isobName+"Shape_"+sector+"_argand_"+str(nBin)+"_"+str(tBin)+".pdf", []])
 				outFile.write(str(x[0]) + ' ' + str(err[0]) + ' ' + str(x[1]) + ' ' + str(err[1]))
-				outFile.write(' ' + str(c2/ndf) + '\n')			
+				outFile.write(' ' + str(c2/ndf) + '\n')
 		return
 
 	fileNames = {}
@@ -284,24 +349,32 @@ def main():
 	if makeTotals:
 		model.calculateNonShapeParameters()
 		totalHists = model.getTotalHists(model.getZeroModeParametersForMode())
-	
-		with root_open("./totals_2mp1p"+studyAdder+".root", "UPDATE") as out:
+
+		with root_open("./totals_"+studyAdder+".root", "UPDATE") as out:
 			for t in totalHists:
 				for m in t:
 					m.Write()
+#	return
 
-	folder = "./comparisonResultsData"+studyAdder+"/"
+#	folder = "./comparisonResultsData"+studyAdder+"/"
+#	folder = "./"
+	folder = "./3ppAllXchecks/"
 	for s, sect in enumerate(model.sectors):
-		model.removeZeroModeFromComa()
+#		model.removeZeroModeFromComa()
 		model.removeGlobalPhaseFromComa()
 		zeroParDummy = [[] * (stopBin-startBin)]
 		model.calculateNonShapeParameters()
 		rv = model.produceResultViewer(zeroParDummy,s, noRun = True, plotTheory = True)
-		rv.plotData = False
-		rv.writeBinToPdf(startBin, stdCmd = [folder + sect + "_data_2D_"+str(tBin)+".pdf", "", [], "", []])
-		if not writeBins:
-			writeBins = range(startBin, stopBin)
+		rv.twoDtitleLeft = "Preliminary"
+		rv.titleFontSize = 11
+		rv.showColorBar  = True
+		rv.plotData      = False
+		rv.scaleArgandZeroLine = scaleArgandZeroLine
 
+		rv.writeBinToPdf(startBin, stdCmd = [folder + fileSectorName + "_2D_t"+str(tBin)+".pdf", "", [], "", []])
+		rv.scale(1000./40.)
+		if tBin in intensFakk:
+			rv.topMarginIntens *= intensFakk[tBin]
 		for b in writeBins:
 #			intensNames         = [name+".intens" for name in fileNames[sect,b]]
 #			argandNames         = [name+".argand" for name in fileNames[sect,b]]
@@ -312,21 +385,24 @@ def main():
 			rv.tStringYpos      = 0.865
 			rv.addiColor        = modernplotting.colors.colorScheme.red
 			rv.legendCorrected  = r"Freed-isobar PWA"
-			if Xcheck:			
-				rv.legendMethods    = "X-check"
-				rv.tString          = ""
-			rv.labelPoints      = labelPoints[tBin]
-			rv.shiftMap         = shiftMap[tBin]
-			rv.makeLegend       = True
-			rv.topMarginIntens *= intensFakk[tBin]
-			rv.intensLabel      = LaTeX_strings.intensReleaseNote
-			rv.printLiminary    = True
-			rv.scale(1000./40.)
+			if Xcheck:
+				rv.legendMethods = "X-check"
+				rv.tString       = ""
+				rv.XcheckArgand  = True
+			if tBin in labelPoints:
+				rv.labelPoints   = labelPoints[tBin]
+				rv.shiftMap      = shiftMap[tBin]
+			rv.makeLegend = True
+			rv.intensLabel   = LaTeX_strings.intensReleaseNote
+			rv.printLiminary = True
+			rv.addiXoffset   = 0.01
 			if tBin in tickMap:
 				rv.xticks = tickMap[tBin][0]
 				rv.yticks = tickMap[tBin][1]
-
-			rv.writeBinToPdf(b, stdCmd = ["", folder + sect + "_data_intens_"+str(b)+"_"+str(tBin)+".pdf", intensNames,  folder + sect + "_data_argand_"+str(b)+"_"+str(tBin)+".pdf", argandNames])
+			if Xcheck:
+				intensNames = [intensBaseName.replace("<mBin>",str(b))]
+				argandNames = [argandBaseName.replace("<mBin>",str(b)).replace("<>",c) for c in ['0','1','2','3','C']]
+			rv.writeBinToPdf(b, stdCmd = ["", folder + fileSectorName + "_int_m"+str(b)+"_t"+str(tBin)+".pdf", intensNames, folder + fileSectorName + "_arg_m"+str(b)+"_t"+str(tBin)+".pdf", argandNames])
 
 
 if __name__ == "__main__":

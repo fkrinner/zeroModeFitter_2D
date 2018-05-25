@@ -1,5 +1,6 @@
 import numpy as np
 import physUtils
+from cmath import phase
 
 class parameter:
 	def __init__(self, value, name, error = 0.):
@@ -82,6 +83,21 @@ class parametersTrackingParameterization:
 				self.parameters[i].value = params[count]
 				count += 1
 
+	def makeLoadMap(self, parameters):
+		self.nPar       = 0
+		self.loadMap    = []
+		self.parameters = parameters
+		if not len(parameters) == self.nParAll:
+			raise IndexError("Number of parameters does not match (" + str(len(parameters))+"/"+str(self.nParAll)+")")
+		for p in parameters:
+			if not p.lock:
+				self.loadMap.append(True)
+				self.nPar += 1
+				p.lock = True
+			else:
+				self.loadMap.append(False)
+#		print "Made loadMap:",str(self.loadMap)
+
 	def setParametersAndErrors(self, params, errors):
 		if not len(errors) == self.nPar:
 			print "Number of errors does not match"
@@ -107,6 +123,210 @@ class parametersTrackingParameterization:
 	def returnParameters(self):
 		return self.parameters
 
+	def writeToFile(self, outFileName, masses, externalKinematicVariables = []):
+		vals = self(masses, externalKinematicVariables)
+		with open(outFileName, 'w') as outFile:
+			for i in range(len(masses)):
+				outFile.write(str(masses[i]) + ' ' + str(abs(vals[i])**2) + ' ' + str(vals[i].real) + ' ' + str(vals[i].imag) + ' ' + str(phase(vals[i])) + '\n')
+
+class simpleOneChannelKmatrix(parametersTrackingParameterization):
+	def __init__(self, parameters, nPole, polyDegPlusOne, sThresh):
+		self.sThresh = sThresh
+		self.nPole   = nPole
+		self.pdpo    = polyDegPlusOne
+		self.nParAll = 2*nPole + polyDegPlusOne
+		self.makeLoadMap(parameters)
+
+		self.use_CM       = False
+		self.secondSheet  = False
+		self.iEpsilon     = 1.e-5j
+
+	def __call__(self, ms, externalKinematicVariables = []):
+		par = [p.value for p in self.parameters]
+		retVals = np.zeros((len(ms)), dtype = complex)
+		for i,m in enumerate(ms):
+			s     = m**2 + self.iEpsilon
+
+			if self.use_CM:
+				iRhoPS = physUtils.threshChewMandelstam(s,self.sThresh)
+			else:
+				iRhoPS = -(self.sThresh/s-1.+0.j)**.5 # phase space
+			K     = 0.
+			count = 0
+			for p in range(self.nPole):
+				K     += par[count+1]/(par[count] - s)
+				count += 2
+			for p in range(self.pdpo):
+				K     += par[count]*s**p
+				count += 1
+			retVals[i] = K/(1. - iRhoPS*K)
+		return retVals
+
+	def complexCall(self, s):
+		par    = [p.value for p in self.parameters]
+		if self.use_CM:
+			iRhoPS = physUtils.threshChewMandelstam(s,self.sThresh)
+		else:
+			iRhoPS = -(self.sThresh/s-1.+0.j)**.5 # phase space
+		K      = 0.
+		count  = 0
+		for p in range(self.nPole):
+			K     += par[count+1]/(par[count] - s)
+			count += 2
+		for p in range(self.pdpo):
+			K     += par[count]*s**p
+			count += 1
+		if not self.secondSheet:
+			return K/(1.-iRhoPS*K)
+		else:
+			iRhoPS = - (self.sThresh/s-1.+0.j)**.5
+			return K/(1.- K*(iRhoPS+2*(self.sThresh/s-1.+0.j)**.5))
+
+	def absInverse(self, reim):
+		val = self.complexCall(reim[0] + 1.j*reim[1])
+		return 1./abs(val)**2
+
+	def makeMathematicaString(self, functionName = "K", var = 's'):
+		par = [p.value for p in self.parameters]
+		retVal = functionName + '[' + var + '_] := '
+		count  = 0
+		first  = True
+		for p in range(self.nPole):
+			if not first:
+				retVal += " + "
+			else:
+				first = False
+			retVal += '('+str(par[count+1].real)+")/("+str(par[count].real)+' - '+var+')'
+			count  += 2
+		for p in range(self.pdpo):
+			if not first:
+				retVal += " + "
+			retVal += '(' + str(par[count].real) + ')'
+			count  += 1
+			if p == 1:
+				retVal += var
+			if p > 1:
+				retVal += var+'^'+str(p)
+		rhoString = r"\[Rho]["+var+"_] := Sqrt[ 1 - " + str(self.sThresh)+'/'+var + ']'
+		return retVal, rhoString
+
+class binnedPolynomial(parametersTrackingParameterization):
+	"""
+	Independent polynomial for all bins in m3pi
+	"""
+	def __init__(self, parameters, mMin, mMax, nBins, degree, baseExponent, real = True):
+		self.mMin  = mMin
+		self.mMax  = mMax
+		self.nBins = nBins	
+		self.step  = (mMax-mMin)/nBins
+
+		self.deg   = degree # 1 + c1 x + c2 x*2 is degree 2 (zertoh order is take care of by the normalization)
+		self.base  = baseExponent
+		self.real  = real
+
+		self.parPerBin = self.deg
+		if not self.real: # is complex valued
+			self.parPerBin *= 2
+		self.nParAll = self.nBins*self.parPerBin
+		self.makeLoadMap(parameters)
+
+	def __call__(self, ms, externalKinematicVariables = []):
+		if len(externalKinematicVariables) == 0:
+			raise ValueError("No 3pi mass bin given")
+		nBin    = self.findBin(externalKinematicVariables[0])
+		par     = [p.value for p in self.parameters]
+		retVals = np.full((len(ms)),1., dtype = complex)
+		cpls = [0.]*self.deg
+		if self.real:
+			for i in range(self.deg):
+				cpls[i] = par[nBin*self.parPerBin + i]
+		else:
+			for i in range(self.deg):
+				cpls[i] = par[nBin*self.parPerBin + 2*i] + 1.j*par[nBin*self.parPerBin + 2*i+1]
+		for i,m in enumerate(ms):
+			val = 1.
+			for i in range(self.deg):
+				val += cpls[i]*m**(self.base*(i+1))
+			retVals[i] = val
+		return retVals
+
+	def findBin(self, m):
+		if m < self.mMin or m > self.mMax:
+			raise ValueError("Mass m = "+str(m)+" out of range: "+str(self.mMin) +" < m < "+str(self.mMax))
+		return int((m-self.mMin)/self.step)
+
+	
+
+class multiply(parametersTrackingParameterization):
+	"""
+	Functions to multiply may not be used elsewhere
+	To do this, initialize the same function twice and use the same 
+	instances of the 'parameters' class
+	"""
+	def __init__(self, functions):
+		"""
+		Do not need the paramters here!!!
+		"""
+		self.nPar       = 0
+		self.nParAll    = 0
+		self.functions  = functions
+		self.borders    = [0]
+		self.bordersAll = [0]
+		for f in self.functions:
+			self.nPar    += f.nPar
+			self.borders.append(self.nPar)
+			self.nParAll += f.nParAll
+			self.bordersAll.append(self.nParAll)
+
+	def setParameters(self, params):
+		if not len(params) == self.nPar:
+			raise IndexError("Number of parameters does not match")
+		for i,f in enumerate(self.functions):
+			f.setParameters(params[self.borders[i]:self.borders[i+1]])
+
+	def setParametersAndErrors(self, params, errors):
+		if not len(errors) == self.nPar:
+			print "Number of errors does not match"
+			return False
+		if not len(params) == self.nPar:
+			print "Number of parameters does not match"
+			return False
+		for i,f in enumerate(self.functions):
+			f.setParametersAndErrors(params[self.borders[i]:self.borders[i+1]], errors[self.borders[i]:self.borders[i+1]])
+		return True	
+
+	def getParameters(self):
+		retVal = []
+		for f in self.functions:
+			retVal += f.getParameters()
+		return retVal
+
+	def returnParameters(self):
+		retVal = []
+		for f in self.functions:
+			retVal += f.parameters
+		return retVal
+
+	def __call__(self, ms, externalKinematicVariables = []):
+		retVals = np.full((len(ms)),1., dtype = complex)
+		for f in self.functions:
+			retVals *= f(ms, externalKinematicVariables = externalKinematicVariables) # numpy arrays are cool
+		return retVals
+
+class productOfSimpleFunctions(parametersTrackingParameterization):
+	def __init__(self, functions, parameters):
+		self.nParAll = len(functions)
+		self.fs      = functions
+		self.makeLoadMap(parameters)
+
+	def __call__(self,ms, externalKinematicVariables = []):
+		par = [p.value for p in self.parameters]
+		retVals = np.full((len(ms)),1., dtype = complex)
+		for i,m in enumerate(ms):
+			for nF,f in enumerate(self.fs):
+				retVals[i] *= f(par[nF]*m)
+		return retVals
+
 class omnesFunctionPolynomial(parametersTrackingParameterization):
 	"""
 	Omnes polynomial allows to set parameters to real. For complex coefficients it it more efficient to use monomials
@@ -126,18 +346,7 @@ class omnesFunctionPolynomial(parametersTrackingParameterization):
 		self.stretch = stretch
 		if stretch:
 			self.nParAll += 1
-		if not len(parameters) == self.nParAll:
-			raise IndexError("Number of parameters does not match")
-		self.loadMap = []
-		self.nPar    = 0
-		self.parameters = parameters
-		for p in self.parameters:
-			if not p.lock:
-				self.loadMap.append(True)
-				self.nPar += 1
-				p.lock = True
-			else:
-				self.loadMap.append(False)
+		self.makeLoadMap(parameters)
 
 	def __call__(self, ms, externalKinematicVariables = []):
 		par = [p.value for p in self.parameters]
@@ -159,7 +368,6 @@ class omnesFunctionPolynomial(parametersTrackingParameterization):
 #				print 
 				s *= par[skip]
 				skip += 1
-
 			poly = 1.
 			for d in range(self.polDeg):
 				if self.complexPolynomial:
@@ -170,12 +378,12 @@ class omnesFunctionPolynomial(parametersTrackingParameterization):
 			retVals[i] = poly * lookupOmnes(s)
 		return retVals
 
-
 class fixedParameterization(parametersTrackingParameterization):
 	def __init__(self, path):
 		self.path       = path
 		self.parameters = []
-		self.nPar       = 0
+		self.nParAll    = 0
+		self.makeLoadMap(parameters)
 	
 	def __call__(self, ms, externalKinematicVariables = []):
 		retVals = np.zeros((len(ms)), dtype = complex)
@@ -183,22 +391,11 @@ class fixedParameterization(parametersTrackingParameterization):
 			retVals[i] = 1.
 		return retVals
 
-
 class breitWigner(parametersTrackingParameterization):
 	def __init__(self, parameters):
-		self.nPar       = 0
 		self.nParAll    = 2
-		self.loadMap    = []
-		self.parameters = parameters
-		if not len(parameters) == self.nParAll:
-			raise IndexError("Number of parameters does not match (" + str(len(parameters))+"/"+str(self.nParAll)+")")
-		for p in parameters:
-			if not p.lock:
-				self.loadMap.append(True)
-				self.nPar += 1
-				p.lock = True
-			else:
-				self.loadMap.append(False)
+		self.makeLoadMap(parameters)
+
 	def __call__(self, ms, externalKinematicVariables = []):
 		par = [p.value for p in self.parameters]
 		retVals = np.zeros((len(ms)), dtype = complex)
@@ -208,25 +405,82 @@ class breitWigner(parametersTrackingParameterization):
 			retVals[i] = num/(den - m**2)
 		return retVals
 
-globalLfactor = 1 # probobly not needed anymore
+class pole(parametersTrackingParameterization):
+	def __init__(self, parameters):
+		self.nParAll = 2
+		self.makeLoadMap(parameters)
+		
+	def __call__(self, ms, externalKinematicVariables = []):
+		par = [p.value for p in self.parameters]
+		retVals = np.zeros((len(ms)), dtype = complex)
+		polPos = par[0] + 1.j*par[1]
+		for i,m in enumerate(ms):
+			s = m**2
+			retVals[i] = 1./(polPos-s)
+		return retVals
+
+class pietarinenExpansion(parametersTrackingParameterization):
+	def __init__(self, parameters, nPole, threshsolds = [], polDeg3Pi = 0):
+		"""
+		With an empty list of thresholds, the function is a linear combination of poles+1
+		Since the fitter will multiply everything with a complex coefficient, set the 0th order in the expansions to 1.+0.j
+
+		Paparameters are : [pole1ResuduumReal, pole1ResiduumImag, pole1PositionReal, pole1PositionImag, pole2..., thresh1Alpha, thres1C1, thresh1C2, ..., thres2...]
+		"""
+		self.nPole       = nPole
+		self.threshsolds = threshsolds
+		self.nThresh     = len(threshsolds)
+		self.nParAll     = 4*self.nPole
+		self.polDeg3Pi   = polDeg3Pi # Constant is polynomial of 0th degree... index handling more tedious, but what can you do
+		for t in range(self.nThresh):
+			if self.threshsolds[t][1] > 0:
+				self.nParAll += 1+self.threshsolds[t][1]*(polDeg3Pi+1) # 1 for the alpha and self.threshsolds[t][1] for the polynomial coefficients
+		self.makeLoadMap(parameters)
+
+	def __call__(self, ms, externalKinematicVariables):
+		retVals = np.zeros((len(ms)), dtype = complex)
+		par = [p.value for p in self.parameters]
+#		print ">>>",par,"<<<"
+		if not len(par) == self.nParAll:
+			raise IndexError("pietarinenExpansion.__call__(...): Parameter number mismatch")
+		s3pi = externalKinematicVariables[0]**2
+		for b,m in enumerate(ms):
+			val      = 1.+0.j
+			s        = m**2
+			parCount = 0
+			for _ in range(self.nPole):
+				val      += (par[parCount] + 1.j*par[parCount+1])/(par[parCount+2] + 1.j*par[parCount+3] - s)
+				parCount += 4
+			for t in range(self.nThresh):
+				nn = self.threshsolds[t][1]
+				if nn == 0:
+					continue
+				sqrt = (self.threshsolds[t][0] - s+ 0.j)**.5 # + 0.j, that python handels complexity right. (First Riemann sheet will be used: (-1.+0.j)**.5 = 0.+1.j
+				Z    = (par[parCount]-sqrt)/(par[parCount]+sqrt)
+				parCount += 1
+				for i in range(nn):
+					C = 0.
+					for d in range(self.polDeg3Pi+1):
+						C += par[parCount+d]*s3pi**d
+					val      += C*Z**(i+1)
+					parCount += self.polDeg3Pi + 1
+			retVals[b] = val
+		if not parCount == self.nParAll:
+			raise IndexError("pietarinenExpansion.__call__(...): Some parameter number mismatch:" + str(parCount) + " vs. " + str(self.nParAll))
+#		print ">>>",retVals,"<<<"
+		return retVals
+
+globalLfactor = 1 # probably not needed anymore
 
 class complexPolynomial(parametersTrackingParameterization):
-	def __init__(self, degree, parameters):
+	def __init__(self, degree, parameters, baseExponent = 1):
 		self.degree = degree
 		if not len(parameters) == 2*self.degree:
 			raise IndexError("Number of parameters does not match")
-		self.parameters = parameters
-		self.loadMap      = []
 		self.nParAll      = 2*degree
-		self.nPar         = 0
-		self.baseExponent = 1 # Can be adjusted (2 e.g. gives a polynomial in s = m**2)
-		for p in parameters:
-			if not p.lock:
-				self.loadMap.append(True)
-				self.nPar += 1
-				p.lock = True
-			else:
-				self.loadMap.append(False)
+
+		self.baseExponent = baseExponent # Can be adjusted (2 e.g. gives a polynomial in s = m**2)
+		self.makeLoadMap(parameters)
 
 	def __call__(self,ms, externalKinematicVariables):
 		retVals = np.zeros((len(ms)), dtype = complex)
@@ -236,24 +490,66 @@ class complexPolynomial(parametersTrackingParameterization):
 			massExp = 1.
 			for j in range(self.degree):
 				massExp *= m**self.baseExponent
-				val += (par[2*j] + 1.j*par[2*j+1]) * massExp
+				val     += (par[2*j] + 1.j*par[2*j+1]) * massExp
 			retVals[i] = val
 		return retVals
-	
+
+class realPolynomial(parametersTrackingParameterization):
+	def __init__(self, degree, parameters, baseExponent = 1):
+		self.degree = degree
+		if not len(parameters) == self.degree:
+			raise IndexError("Number of parameters does not match")
+		self.nParAll      = degree
+		self.baseExponent = baseExponent # Can be adjusted (2 e.g. gives a polynomial in s = m**2)
+		self.makeLoadMap(parameters)
+
+	def __call__(self, ms, externalKinematicVariables = []):
+		retVals = np.zeros((len(ms)), dtype = complex)
+		par = [p.value for p in self.parameters]
+		for i, m in enumerate(ms):
+			val     = 1.
+			massExp = 1.
+			for j in range(self.degree):
+				massExp *= m**self.baseExponent
+				val     += par[j]*massExp
+			retVals[i] = val
+		return retVals
+
+class twoDimensionalRealPolynomial(parametersTrackingParameterization):
+	def __init__(self, degree2Pi, degree3Pi, parameters, baseExponent = 1):
+		self.degree2Pi    = degree2Pi
+		self.degree3Pi    = degree3Pi
+		self.baseExponent = baseExponent
+		self.nParAll      = degree2Pi*(degree3Pi+1)
+		self.makeLoadMap(parameters)
+
+	def __call__(self, ms, externalKinematicVariables = []):
+		retVals = np.zeros((len(ms)), dtype = complex)
+		par     = [p.value for p in self.parameters]
+		m3      = externalKinematicVariables[0]
+		for i, m in enumerate(ms):
+			val   = 1.
+			count = 0
+			for i2 in range(self.degree2Pi):
+				c = 0.
+				for i3 in range(self.degree3Pi+1):
+					c     += par[count]*m3**(i3*self.baseExponent)
+					count += 1
+				val += c*m**((i2+1)*self.baseExponent)			
+			retVals[i] = val
+		return retVals
 
 class relativisticBreitWigner(parametersTrackingParameterization):
-	def __init__(self, parameters, m1, m2, m3, J, L, fitPr = False):
+	def __init__(self, parameters, m1, m2, m3, J, L, fitPr = False, barrierFactors = True):
 		self.L            = L * globalLfactor
 		self.J            = J * globalLfactor
 		self.m1           = m1
 		self.m2           = m2
 		self.m3           = m3
 		self.Pr           = 0.1973
-		self.nPar         = 0 # Number of parameters, this function handels
 		self.nParAll      = 2 # Number of parameters, this function uses
-		self.loadMap      = []
 		self.fitPr        = fitPr
-		self.parameters   = parameters
+		self.barrier      = barrierFactors
 		self.compensatePr = True # If True and self.fitPr, the resultung
 					 # amplitude will be compensated for 
 					 # self.pr. Meaning, that it will be 
@@ -263,18 +559,12 @@ class relativisticBreitWigner(parametersTrackingParameterization):
 					 # again.
 		if self.fitPr:
 			self.nParAll += 2
-		if not len(parameters) == self.nParAll:
-			raise IndexError("Number of parameters does not match (" + str(len(parameters))+"/"+str(self.nParAll)+")")
-		for p in parameters:
-			if not p.lock:
-				self.loadMap.append(True)
-				self.nPar += 1
-				p.lock = True
-			else:
-				self.loadMap.append(False)
+		self.makeLoadMap(parameters)
 
 	def __call__(self, ms, externalKinematicVariables = []):
 		par = [p.value for p in self.parameters]
+
+#		print par,r"|||\\\||"
 
 		if len(externalKinematicVariables) < 1:
 			raise IndexError("No external kinematic variable given")
@@ -317,11 +607,8 @@ class flatte(parametersTrackingParameterization):
 		self.m2nd1        = m2nd1 # Masses for the second channel
 		self.m2nd2        = m2nd2 # Masses for the second channel
 		self.Pr           = 0.1973
-		self.nPar         = 0 # Number of parameters, this function handels
 		self.nParAll      = 3 # Number of parameters, this function uses
-		self.loadMap      = []
 		self.fitPr        = fitPr
-		self.parameters   = parameters
 		self.compensatePr = True # If True and self.fitPr, the resultung
 					 # amplitude will be compensated for 
 					 # self.pr. Meaning, that it will be 
@@ -331,15 +618,7 @@ class flatte(parametersTrackingParameterization):
 					 # again.
 		if self.fitPr:
 			self.nParAll += 2
-		if not len(parameters) == self.nParAll:
-			raise IndexError("Number of parameters does not match (" + str(len(parameters))+"/"+str(self.nParAll)+")")
-		for p in parameters:
-			if not p.lock:
-				self.loadMap.append(True)
-				self.nPar += 1
-				p.lock = True
-			else:
-				self.loadMap.append(False)
+		self.makeLoadMap(parameters)
 
 	def __call__(self, ms, externalKinematicVariables = []):
 		par = [p.value for p in self.parameters]
@@ -376,7 +655,6 @@ class flatte(parametersTrackingParameterization):
 				retVals[i] *= compensationFactor
 		return retVals
 
-
 class relativisticBreitWignerRatio(parametersTrackingParameterization):
 	def __init__(self, parameters, m1, m2, m3, J, L, fitPr = False):
 		self.L            = L * globalLfactor
@@ -385,11 +663,8 @@ class relativisticBreitWignerRatio(parametersTrackingParameterization):
 		self.m2           = m2
 		self.m3           = m3
 		self.Pr           = 0.1973
-		self.nPar         = 0          # Number of parameters, this function handels
 		self.nParAll      = 3 # Number of parameters, this function uses
-		self.loadMap      = []
 		self.fitPr        = fitPr
-		self.parameters   = parameters
 		self.compensatePr = True # If True and self.fitPr, the resultung
 					 # amplitude will be compensated for 
 					 # self.pr. Meaning, that it will be 
@@ -399,15 +674,7 @@ class relativisticBreitWignerRatio(parametersTrackingParameterization):
 					 # again.
 		if self.fitPr:
 			self.nParAll += 2
-		if not len(parameters) == self.nParAll:
-			raise IndexError("Number of parameters does not match (" + str(len(parameters))+"/"+str(self.nParAll)+")")
-		for p in parameters:
-			if not p.lock:
-				self.loadMap.append(True)
-				self.nPar += 1
-				p.lock = True
-			else:
-				self.loadMap.append(False)
+		self.makeLoadMap(parameters)
 
 	def __call__(self, ms, externalKinematicVariables = []):
 		par = [p.value for p in self.parameters]
@@ -453,11 +720,8 @@ class integratedRelativisticBreitWigner(parametersTrackingParameterization):
 		self.m2           = m2
 		self.m3           = m3
 		self.Pr           = 0.1973
-		self.nPar         = 0 # Number of parameters, this function handels
 		self.nParAll      = 2 # Number of parameters, this function uses
-		self.loadMap      = []
 		self.fitPr        = fitPr
-		self.parameters   = parameters
 		self.compensatePr = True # If True and self.fitPr, the resultung
 					 # amplitude will be compensated for 
 					 # self.pr. Meaning, that it will be 
@@ -471,15 +735,7 @@ class integratedRelativisticBreitWigner(parametersTrackingParameterization):
 		self.nPoints      = nPoints
 		if self.fitPr:
 			self.nParAll += 2
-		if not len(parameters) == self.nParAll:
-			raise IndexError("Number of parameters does not match (" + str(len(parameters))+"/"+str(self.nParAll)+")")
-		for p in parameters:
-			if not p.lock:
-				self.loadMap.append(True)
-				self.nPar += 1
-				p.lock = True
-			else:
-				self.loadMap.append(False)
+		self.makeLoadMap(parameters)
 
 	def __call__(self, ms, externalKinematicVariables = []):
 		par = [p.value for p in self.parameters]

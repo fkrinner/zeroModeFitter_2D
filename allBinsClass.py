@@ -78,6 +78,27 @@ class allBins:
 			count += nNon
 		return chi2
 
+	def randomize(self):
+		"""
+		Simple mass bin loop of the randomize() method
+		"""
+		for mb in self.massBins:
+			mb.randomize()
+
+	def unrandomize(self):
+		"""
+		Simple mass bin loop of the unrandomize() method
+		"""
+		for mb in self.massBins:
+			mb.unrandomize()
+
+	def addComaValueForZeroMode(self, val, unitsOf = 'smallestComaValue'):
+		"""
+		Simple mass bin loop of the 'addComaValueForZeroMode(...)' method
+		"""
+		for mb in self.massBins:
+			mb.addComaValueForZeroMode(val, unitsOf = unitsOf)
+
 	def getNDF(self):
 		"""
 		Return NDF as list of (NDF, 2*nZero, 2*nFunc, nPar) (Simple mass bin loop)
@@ -85,6 +106,37 @@ class allBins:
 		retVal = []
 		for mb in self.massBins:
 			retVal.append(mb.getNDF())
+		return retVal
+
+	def getNonShapeParameters(self, pars = []):
+		"""
+		Gets the non-shape parameters at the minimum of chi2(...) (Simple mass loop)
+		"""
+		retVal = []
+		for mb in self.massBins:
+			retVal.append(mb.getNonShapeParameters(pars = pars))
+		return retVal
+
+	def getChi2forNonShapeParameters(self,nonShapeParameters, shapePars = []):
+		"""
+		Gets the chi2 for a given set of non-shape parameters (Simple mass loop)
+		"""
+		if not len(nonShapeParameters) == len(self.massBins):
+			raise ValueError("mBin dimension mismatch")
+		chi2 = 0.
+		for b,mb in enumerate(self.massBins):
+			chi2 += mb.getChi2forNonShapeParameters(nonShapeParameters[b], shapePars = shapePars)
+		return chi2
+
+	def eigenbasisChi2contributions(self, nonShapeParameters):
+		"""
+		Gets the chi2 resolved in the eigenbasis of the respective covatiance matices (Simple mass loop)
+		"""
+		if not len(nonShapeParameters) == len(self.massBins):
+			raise ValueError("mBin dimension mismatch")
+		retVal = []
+		for b,mb in enumerate(self.massBins):
+			retVal.append(mb.eigenbasisChi2contributions(nonShapeParameters[b]))
 		return retVal
 
 	def nPar(self):
@@ -220,12 +272,12 @@ class allBins:
 		return addedList
 
 
-	def removeAllCorrelations(self):
+	def removeAllCorrelations(self, removeReImCorrel = True):
 		"""
 		Removes ALL correlations from the covariance matrix (Simple mass bin loop)
 		"""
 		for mb in self.massBins:
-			mb.removeAllCorrelations()
+			mb.removeAllCorrelations(removeReImCorrel = removeReImCorrel)
 
 	def renormZeroModes(self):
 		"""
@@ -442,6 +494,15 @@ class allBins:
 			nz = 2*mb.nZero
 			mb.fillTotal(params[parCount:parCount+nz], hists, binRange = binRange)
 			parCount += nz
+
+	def getTheoryTotalMatrices(self, binRange = None):
+		"""
+		simple mass bin loop
+		"""
+		retVal = []
+		for mb in self.massBins:
+			retVal.append(mb.getTheoryTotalMatrices(binRange = binRange))
+		return retVal
 
 	def setZeroModeParameters(self, zmp):
 		"""

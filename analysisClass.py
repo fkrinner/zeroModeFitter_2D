@@ -1,8 +1,9 @@
 from rootfabi import root_open, GetKeyNames
+import ROOT
 import numpy as np
 import numpy.linalg as la
 from allBinsClass import allBins
-from modes import PHASE, AMPL, SMOOTH, NONE, REAL, IMAG, REIMCORRELATION, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO
+from modes import PHASE, AMPL, SMOOTH, NONE, REAL, IMAG, REIMCORRELATION, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO, INTENS
 import os, sys
 from utils import zeroForSectors, getZeroHistBorders, sumUp, INF, renormToBinWidth, divideAbyB, get3PiHistogram
 import parameterTrackingParameterizations as ptc
@@ -15,6 +16,9 @@ from resultViewerClass import resultViewer
 from utils import loadAmplsTM, changeReferenceWave
 from estimateErrors import estimateErrors,estimateErrors2,estimateErrors3
 from math import isnan
+from datetime import datetime
+import types
+from iminuit import Minuit
 
 class amplitudeAnalysis:
 	"""
@@ -41,6 +45,7 @@ class amplitudeAnalysis:
 		self.model          = tBinHolder()
 		self.flags          = {}
 		self.mode           = NONE
+		self.numLim         = 1.e-10
 
 	def IS(self, flag):
 		"""
@@ -56,31 +61,72 @@ class amplitudeAnalysis:
 		"""
 		self.flags[flag] = True
 
-	def fitShapeParametersForBinRange(self, startPars, tBinsToEvaluate, mBinsToEvaluate, zeroModeParameters = []):
+	def initMinuitFunction(self, parameters):
+		argString = ','.join([p.name+'='+str(p.value) for p in parameters])
+		lstString = ','.join([p.name for p in parameters])
+		command = "def explicit_MINUIT_function(self,"+lstString+"):\n\t\treturn self.MINUIT_function(["+lstString+"])"
+		self.paramNameList = [p.name for p in parameters]
+		self.startValueString = argString
+		exec command
+		self.explicit_MINUIT_function = types.MethodType(explicit_MINUIT_function, self)
+
+	def fitShapeParametersForBinRange(self, startPars, tBinsToEvaluate, mBinsToEvaluate, zeroModeParameters = [], method = "BFGS"):
 		if len(zeroModeParameters) > 0:
 			self.setZeroModeParameters(zeroModeParameters)
 		self.model.setBinsToEvalueate(tBinsToEvaluate,mBinsToEvaluate)
-		pars = startPars[:]
-		resNM     = scipy.optimize.minimize(self.model.fixedZMPchi2, pars, method = 'Nelder-Mead')
-		res       = scipy.optimize.minimize(self.model.fixedZMPchi2, pars)
-		print "message(termination result):",resNM.message,'(',mBinsToEvaluate,')'
-		print resNM.x, res.x
-		hi        = res.hess_inv
-		errs      = []
-		startErrs = []
-		pars = res.x[:]
-		print "final chi2 =",res.fun,"x =",res.x
-		for i in range(len(res.x)):
-#			print hi[i,i],"::::::::::::::::::::{{}"
-			errs.append((2.*hi[i,i])**.5)
-			print "sigerr",(res.x[i]-resNM.x[i])/errs[i]
+		pars    = startPars[:]
+		results = {}
+#		methods = ["Nelder-Mead","Powell","CG","BFGS","Newton-CG","L-BFGS-B","TNC","COBYLA","SLSQP","dogleg","trust-ncg","trust-exact","trust-krylov"]
+		start   = datetime.now()
+		self.MINUIT_function = self.model.fixedZMPchi2
+		cmd="m = Minuit(self.explicit_MINUIT_function,"+self.startValueString+")"
+		exec cmd
+		print "Starting migrad"
+		m.migrad()
+		self.MINUITcoma = [[0.]*len(self.paramNameList) for _ in range(len(self.paramNameList))]
+		for i,pni in enumerate(self.paramNameList):
+			for j,pnj in enumerate(self.paramNameList):
+#				print pni,pnj, m.covariance[(pni,pnj)]
+				self.MINUITcoma[i][j] = m.covariance[(pni,pnj)]
 
-		errs = estimateErrors2(self.model.chi2, pars, errs)
 		NDF  = self.model.getFixedZMndf()
+		vals = [m.values[name] for name in self.paramNameList]
+		errs = [m.errors[name] for name in self.paramNameList]
+		c2   = self.MINUIT_function(vals)
 
-		print "---------------------------------------------------------------------"
+		if not self.model[0].setParametersAndErrors(vals, errs):
+				raise RuntimeError("Could not set parameter errors")
+		self.chi2 = c2
+		self.SET('hasFitResult')
+		self.fitParameters = vals
 
-		return res.x, errs, res.fun, NDF
+		return vals, errs, c2, NDF
+
+#		print(m.values)
+#		print(m.errors) 
+#		sys.exit(0)
+#		res     = scipy.optimize.minimize(self.model.fixedZMPchi2, pars, method = method, jac = False)
+#		delT    = datetime.now() - start
+#		print "minimzation took",delT
+#		hi        = res.hess_inv
+#		errs      = []
+#		startErrs = []
+#		pars = res.x[:]
+#		print "final chi2 =",res.fun,"x =",res.x
+#		for i in range(len(res.x)):
+##			print hi[i,i],"::::::::::::::::::::{{}"
+#			errs.append((2.*hi[i,i])**.5)
+##			print "sigerr",(res.x[i]-resNM.x[i])/errs[i]
+#
+#		errs = estimateErrors2(self.model.chi2, pars, errs)
+#		NDF  = self.model.getFixedZMndf()
+#		print "---------------------------------------------------------------------"
+#		self.chi2 = res.fun
+#		self.SET('hasFitResult')
+#		self.fitParameters = res.x[:]
+#		retPars = res.x
+#		self.model.self.model.fixedZMPchi2(retPars) # Call again, to make sure, the parameters are set 
+#		return res.x, errs, res.fun, NDF
 
 	def setZeroModeParameters(self,params):
 		self.model.setZeroModeParameters(params)
@@ -219,6 +265,12 @@ class amplitudeAnalysis:
 		self.fillTotal(params, hists, binRange = binRange)
 		return hists
 
+	def getTheoryTotalMatrices(self):
+		"""
+		Simple caller... just 'cause
+		"""
+		return self.model.getTheoryTotalMatrices()
+
 	def fillTotal(self, params, hists, binRange = {}):
 		"""
 		Fills histograms for totals
@@ -342,6 +394,12 @@ class amplitudeAnalysis:
 			tBin.setMassRanges(self.sectorRangeMap)
 		self.SET('setup')
 
+	def addComaValueForZeroMode(self, val, unitsOf = 'smallestComaValue'):
+		"""
+		Simple supercaller for 'addComaValueForZeroMode()'
+		"""
+		self.model.addComaValueForZeroMode(val,unitsOf)
+
 	def  compareTwoZeroModeCorrections(self, params1, params2):
 		"""
 		Compares two different corrections of the zero-modes
@@ -377,6 +435,13 @@ class amplitudeAnalysis:
 		for tBin in self.model:
 			tBin.unifyComa()
 		self.SET("UnitCOMA")
+
+	def getParameters(self):
+		retVal = []
+		for k in self.waveModel:
+			for f in self.waveModel[k]:
+				retVal += f.returnParameters()
+		return retVal
 
 	def fitShapeParameters(self, printResult = True):
 		"""
@@ -551,6 +616,69 @@ class amplitudeAnalysis:
 			hesss.append(mBinHess)
 		return cpls, hesss
 
+	def makeTheoryTotals(self, mode = INTENS):
+		hists = []
+		cpls, hesss   = self.getCouplingParameters()
+		totalMatrices = self.getTheoryTotalMatrices()
+		if not len(cpls) == len(hesss) or not len(totalMatrices) == len(cpls) or not len(cpls) == len(self.model):
+			raise RuntimeError("t' bin dimension mismatch")
+		for t,tBin in enumerate(self.tBins):
+			if not len(cpls[t]) == len(hesss[t]) or not len(cpls[t]) == len(totalMatrices[t]):
+				raise RuntimeError("m bin dimension mismatch")
+			histsTbin = [get3PiHistogram("theoTotal_"+mode.NAME+"_"+sector+"_"+str(tBin)) for sector in self.sectors]
+			for m in range(len(cpls[t])):
+				massBin = self.startBin + m
+				count   = 0
+				hi      = la.inv(hesss[t][m])
+				for s in range(len(self.sectors)):
+					nF   = len(totalMatrices[t][m][s])
+					if mode in [REAL, IMAG, REIMCORRELATION] and not nF == 1:
+						raise ValueError("Real and imag part of total only defined for single function")
+					jac  =  [0.]*2*nF
+					coma = [[0.]*2*nF for _ in range(2*nF)]
+					val  = 0.
+					for i in range(nF):
+						for j in range(nF):
+							ci   = cpls[t][m][2*(count+i)] - 1.j*cpls[t][m][2*(count+i)+1] # Conjugation is in here
+							cj   = cpls[t][m][2*(count+j)] + 1.j*cpls[t][m][2*(count+j)+1]
+							igrl = totalMatrices[t][m][s][i,j]
+							if mode == INTENS:
+								val += ci*cj*igrl
+							elif mode == REAL:
+								val = cj.real * igrl**.5 # No '+=;, since only single function for real
+							elif mode == IMAG:
+								val = cj.imag * igrl**.5 # No '+=;, since only single function for real
+							elif mode == REIMCORRELATION:
+								val = hi[2*(count+i)  ,2*(count+j)+1]/2 * igrl
+							else:
+								raise RuntimeError("Invalid mode: '" + mode.NAME + "'")
+							jac[2*i  ] += cj.real*igrl.real - cj.imag*igrl.imag
+							jac[2*i+1] +=-cj.real*igrl.imag - cj.imag*igrl.real
+							jac[2*j  ] += ci.real*igrl.real - ci.imag*igrl.imag
+							jac[2*j+1] +=-ci.real*igrl.imag - ci.imag*igrl.real
+							coma[2*i  ][2*j  ] = hi[2*(count+i)  ,2*(count+j)  ]/2
+							coma[2*i  ][2*j+1] = hi[2*(count+i)  ,2*(count+j)+1]/2
+							coma[2*i+1][2*j  ] = hi[2*(count+i)+1,2*(count+j)  ]/2
+							coma[2*i+1][2*j+1] = hi[2*(count+i)+1,2*(count+j)+1]/2
+					if mode == INTENS:
+						err = 0.
+						for i in range(2*nF):
+							for j in range(2*nF):
+								err += jac[i]*jac[j]*coma[i][j]
+					elif mode == REAL:
+						err = coma[0][0]*igrl
+					elif mode == IMAG:
+						err = coma[1][1]*igrl
+					elif mode == REIMCORRELATION:
+						err = 0.
+					err **= .5					
+					count+=nF
+					if abs(val.imag) > self.numLim:	
+						raise ValueError("nonzero imaginary part in total: "+str(val))
+					histsTbin[s].SetBinContent(massBin+1, val.real)
+					histsTbin[s].SetBinError(massBin+1, err)
+			hists.append(histsTbin)
+		return hists
 
 	def getSmoothnessZeroModeParameters(self):
 		"""

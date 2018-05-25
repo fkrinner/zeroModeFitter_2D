@@ -15,7 +15,7 @@ def parseFile(inFileName, fakk = 1):
 	with open(inFileName, 'r') as inFile:
 		for line in inFile.readlines():
 			chunks = line.split()
-			if not nVals:
+			if nVals in None:
 				nVals = len(chunks)
 			else:
 				if not nVals == len(chunks):
@@ -79,7 +79,7 @@ def makeResonancePlots(massFileNameBase, outFileNameBase, totalFile = None, LaTe
 #	color4 = modernplotting.colors.makeColorDarker(modernplotting.colors.colorScheme.orange,.2)
 
 	colors      = [color1,color2,color3,color4]
-	if totalFile and not totalFile == "":
+	if totalFile is not None and not totalFile == "":
 		totalVals   = parseFile(totalFile, fakk = fakk)
 	massFileName = outFileNameBase.replace("<mode>","mass")
 	with  modernplotting.toolkit.PdfWriter(massFileName) as pdfOutput:
@@ -89,7 +89,7 @@ def makeResonancePlots(massFileNameBase, outFileNameBase, totalFile = None, LaTe
 		plot.setXlim(mMin, mMax)
 		plot.setYlabel(r"$m_{"+isobLaTeX+r"}\,[\text{MeV}/c^2]$")
 		for i in range(4):
-			if totalFile and not totalFile == "":
+			if totalFile is not None and not totalFile == "":
 				plot.plot([mMin, mMax], [totalVals[i][2],totalVals[i][2]], color = colors[i], markersize = 0.)
 			massFileName = massFileNameBase.replace("<tBin>", str(i))
 			tBinVals     = parseFile(massFileName, fakk = fakk)
@@ -128,7 +128,7 @@ def makeResonancePlots(massFileNameBase, outFileNameBase, totalFile = None, LaTe
 		plot.setYlabel(r"$\Gamma_{"+isobLaTeX+r"}\,[\text{MeV}/c^2]$")
 		plot.setXlim(mMin, mMax)
 		for i in range(4):
-			if totalFile and not totalFile == "":
+			if totalFile is not None and not totalFile == "":
 				plot.plot([mMin, mMax], [totalVals[i][4],totalVals[i][4]], color = colors[i], markersize = 0.)
 			massFileName = massFileNameBase.replace("<tBin>", str(i))
 			tBinVals     = parseFile(massFileName, fakk = fakk)

@@ -17,12 +17,50 @@ import LaTeX_strings
 import consistencyUtils as cu
 from studyFileNames import fileNameMap
 
+import scipy
+
 import modernplotting.mpplot
 import modernplotting.toolkit
 import modernplotting.specialPlots as mpsp
 import studyPlotter
+from random import random, randint
 
 from LaTeX_strings import unCorrected_string, weightedAVG_string
+
+def doFunctionFit(inFileName, funcs, startBin, stopBin, tBins, sectorRangeMap, referenceWave = "", writeResultToFile = None, acv = None, zeroModeParameters = None):
+	sector = "1++0+[pi,pi]1--PiS"
+	fitter = amplitudeAnalysis(inFileName, [sector], {sector:funcs}, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap)
+	fitter.loadData(loadIntegrals = True, referenceWave = referenceWave)
+	fitter.finishModelSetup()
+	fitter.mode = AMPL
+
+	parameters = []
+	for f in funcs:
+		for p in f.returnParameters():
+			parameters.append(p)
+
+	fitter.initMinuitFunction(parameters)
+#	fitter.removeZeroModeFromComa()
+	if acv is not None:
+		fitter.addComaValueForZeroMode(acv)
+
+	if zeroModeParameters is None:
+		fitter.fitShapeParameters()
+		fitter.calculateNonShapeParameters()
+		chi2 = fitter.chi2
+		ndf  = fitter.getNDFforMode()
+	else:
+		x,err,chi2,ndf = fitter.fitShapeParametersForBinRange([p.value for p in parameters], [0],range(stopBin-startBin), zeroModeParameters = zeroModeParameters)
+		fitter.calculateNonShapeParametersForZeroModeParameters(zeroModeParameters)
+		for i,p in enumerate(parameters):
+			print p
+	if writeResultToFile is not None:
+		with open(writeResultToFile, 'w') as outFile:
+			outFile.write("- - - - parameters - - - -\n")
+			for p in parameters:
+				outFile.write(str(p)+'\n')
+			outFile.write(" - - - - - fit - - - - -\nchi2/NDF: "+str(chi2)+"/"+str(ndf)+"="+str(chi2/ndf))
+	return fitter
 
 def doF0Fit(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = {}, referenceWave = "", deg = 0, writeResultToFile = None):
 	fixedAMPD_sub = pc.fixedParameterization("/nfs/freenas/tuph/e18/project/compass/analysis/fkrinner/fkrinner/trunk/massDependentFit/scripts/anything/zeroModes/bwAmplitudes_noBF/amp_1pp0pSigmaPiP")	
@@ -250,8 +288,13 @@ def main():
 
 #	referenceWave = ""
 
-	rhoRange         = 1.2
-	if not rhoRange:
+	rhoRange          = None
+	for a in sys.argv:
+		if a.startswith("range"):
+			rhoRange = float(a[5:])
+
+#	rhoRange = None
+	if rhoRange is None:
 		sectorRangeMap = {}
 		rhoRangeString = ""
 	else:
@@ -261,7 +304,7 @@ def main():
 	tBin = int(sys.argv[1])
 	if tBin < 0 or tBin > 3:
 		raise ValueError("Invalid t' bin: " + str(tBin))
-	if len(sys.argv) > 2:
+	if len(sys.argv) == 3:
 		study = sys.argv[2]
 		studyAdder = "_"+study
 	else:
@@ -275,6 +318,9 @@ def main():
 
 	startBin = 13
 	stopBin  = 50
+	if len(sys.argv) > 3:
+		startBin = int(sys.argv[2])
+		stopBin  = int(sys.argv[3])
 
 	plotDataType = '.pdf'
 
@@ -296,6 +342,236 @@ def main():
 	                      "fitRho2G"        : r"$\text{fit}_\rho^{2\Gamma}$",
 	                      "smooth"          : r"smooth"}
 
+#       # - - - - --- Start here with the model builting --- - - - - #       #
+
+	nPol       = 1
+	for a in sys.argv:
+		if a.startswith("nPol"):
+			nPol = int(a[4:])
+
+	rhoRe0     = 0.579053
+	rhoIm0     = 0.109177
+
+	rhoMass    = ptc.parameter(mRho, "rho_mass")
+	rhoWidth   = ptc.parameter(Grho, "rho_width")
+	rho        = ptc.relativisticBreitWigner([rhoMass,rhoWidth], mPi, mPi, mPi, 1, 1, False)
+
+	poleReal   = ptc.parameter(rhoRe0, "rhoRe")
+	poleImag   = ptc.parameter(rhoIm0, "rhoIm")
+
+	mPrime = 1.40
+	Gprime =  .2
+
+	poleRealPrime = ptc.parameter(mPrime**2, "rhoRePrime")
+	poleImagPrime = ptc.parameter(mPrime*Gprime, "rhoImPrime")
+
+	seedint = randint(0,10000)
+
+	polyDeg_po = 8
+	for a in sys.argv:
+		if a.startswith("pdpo"):
+			polyDeg_po = int(a[4:])
+
+	
+	params     = [poleReal,poleImag]
+
+	for d in range(polyDeg_po):
+		params.append(ptc.parameter(2*random()-1., "c_"+str(d)))
+	Kmatrix    = ptc.simpleOneChannelKmatrix(params, nPol, polyDeg_po, 4*mPi**2)
+	useCM      = False
+	for a in sys.argv:
+		if a == "CM":
+			useCM = True
+		if a == "rho":
+			useCM = False
+
+	Kmatrix.use_CM = useCM
+
+	pPolyDeg3  = 7
+	pPolyDeg2  = 4
+	for a in sys.argv:
+		if a.startswith("m3pol"):
+			pPolyDeg3 = int(a[5:])
+		if a.startswith("m2pol"):
+			pPolyDeg2 = int(a[5:])
+
+
+	params     = []
+	for d in range(pPolyDeg2):
+		for e in range(pPolyDeg3+1):
+			params.append(ptc.parameter(2*random()-1., "c_"+str(d+1)+"_"+str(e)))
+	pPoly      = ptc.twoDimensionalRealPolynomial(pPolyDeg2, pPolyDeg3, params, baseExponent = 2) # baseExponent = 2: polynomial in s
+	func       = ptc.multiply([Kmatrix, pPoly])	
+
+	model      = [func]
+#	model      = [rho]
+
+	acv = None
+
+#       # - - - - --- Stop the model building here --- - - - - #       #
+	zeroModeParameters = None
+	fixZeroMode        = True
+#	print sectorRangeMap
+#	return 
+	if fixZeroMode:
+		fixedShapes        = doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, referenceWave = referenceWave, sectorRangeMap = sectorRangeMap)
+		zeroModeParameters = fixedShapes.getZeroModeParametersForMode()
+
+#		RV = fixedShapes.produceResultViewer(zeroModeParameters,"1-+1+[pi,pi]1--PiP", noRun = True, plotTheory = True)
+#		RV.plotData = True
+#		for b in range(startBin, stopBin):
+#			plotNameBase = "./Kmatrix_plots/1mp1p1mmPiP_<mode>_"+str(b)+"_"+str(tBin)+".pdf"
+#			RV.writeBinToPdf(b, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
+#		return
+	if useCM:
+		ps = "CM"
+	else:
+		ps = "rho"
+	if rhoRange is None:
+		rrs = ""
+	else:
+		rrs = "range"+str(rhoRange)+'_'
+	if nPol == 1:
+		nps = ""
+	else:
+		nps = "nPol"+str(nPol)+"_"
+
+	resultFile  =  "./KmatrixResults/1pp_Kmatrix_"+rrs+nps+ps+"_kPol"+str(polyDeg_po-1)+"_pPol"+str(pPolyDeg3)+"-"+str(pPolyDeg2)+"_t"+str(tBin)+"_m"+str(startBin)+'-'+str(stopBin)+'_'+str(seedint)+".dat"
+	fitter      = doFunctionFit(inFileName, model, startBin, stopBin, tBins, sectorRangeMap, referenceWave = referenceWave, acv = acv, zeroModeParameters = zeroModeParameters, writeResultToFile = resultFile)
+
+#       # - - - - --- Start the evaluations here --- - - - - #       #
+	nBinsPlot = 1000
+	def fPlot(v):
+		return v.imag
+#	hist = pyRootPwa.ROOT.TH2D("hhh","hhh", nBinsPlot, -.25, 6.25,nBinsPlot, -1., 1.)
+#	for iX in range(nBinsPlot):
+#		x = hist.GetXaxis().GetBinCenter(iX+1)
+#		for iY in range(nBinsPlot):
+#			y = hist.GetYaxis().GetBinCenter(iY+1)			
+#			s = x+1.j*y
+#			val = Kmatrix.complexCall(s)
+#			hist.SetBinContent(iX+1, iY+1,fPlot(val))
+#	hist.Draw("COLZ")
+#	raw_input("press <enter> to go to the secont sheet")
+	Kmatrix.secondSheet = True
+#	for iX in range(nBinsPlot):
+#		x = hist.GetXaxis().GetBinCenter(iX+1)
+#		for iY in range(nBinsPlot):
+#			y = hist.GetYaxis().GetBinCenter(iY+1)			
+#			s = x+1.j*y
+#			val = Kmatrix.complexCall(s)
+#			hist.SetBinContent(iX+1, iY+1, fPlot(val))
+#	hist.Draw("COLZ")
+	res = scipy.optimize.minimize(Kmatrix.absInverse,[rhoRe0,rhoIm0])
+	print res.x,"pole position"
+	mfv = res.fun
+	resSting = str(res.fun)+ " function value should be zero"
+	print resSting
+	BWstring = "BW par: "+str(abs(res.x[0])**.5)+" "+str(abs(res.x[1])/abs(res.x[0])**.5)+" (all absolute values)"
+	print BWstring
+	print "Starting BW error ersimation"
+	nPoints     = 1000
+	poleMean    = res.x
+	poleSamples = []
+	for i in range(nPoints):
+		pts = np.random.multivariate_normal(fitter.fitParameters, fitter.MINUITcoma)
+		fitter.MINUIT_function(pts) # Call the function once to set parameters inside
+#		fitter.model[0].setParametersAndErrors(pts, fitter.MINUITerrs)
+		res = scipy.optimize.minimize(Kmatrix.absInverse,poleMean)
+		if abs(res.fun) > 100*mfv:
+			raise ValueError("No more pole found: fval = "+str(res.fun))
+		poleSamples.append(res.x)
+		print i
+	meanPole = [0.,0.]
+	for p in poleSamples:
+		meanPole[0] += p[0]
+		meanPole[1] += p[1]
+	meanPole[0] /= len(poleSamples)
+	meanPole[1] /= len(poleSamples)
+	poleComa = [[0.,0.],[0.,0.]]
+	for p in poleSamples:
+		poleComa[0][0] += (p[0]-meanPole[0])**2
+		poleComa[0][1] += (p[0]-meanPole[0])*(p[1]-meanPole[1])
+		poleComa[1][0] += (p[1]-meanPole[1])*(p[0]-meanPole[0])
+		poleComa[1][1] += (p[1]-meanPole[1])**2
+	poleComa[0][0] /= len(poleSamples)-1
+	poleComa[0][1] /= len(poleSamples)-1
+	poleComa[1][0] /= len(poleSamples)-1
+	poleComa[1][1] /= len(poleSamples)-1
+	print " - - - - - - le compaire pramaitre  - - - - - - "
+	print meanPole, poleMean
+	print " - - - - - - le compaire pramaitre  - - - - - - "
+	print poleComa
+	jac = []
+	delta = 1.e-7
+	delPars = fitter.fitParameters[:]
+	for i in range(len(delPars)):
+		delPars[i] += delta
+		fitter.MINUIT_function(delPars)
+		res = scipy.optimize.minimize(Kmatrix.absInverse,poleMean)
+		delPars[i] -= delta
+		if abs(res.fun) > 100*mfv:
+			raise ValueError("No more pole found: fval = "+str(res.fun))
+		jac.append([(res.x[0]-poleMean[0])/delta,(res.x[1]-poleMean[1])/delta])
+	poleComaJac = [[0.,0.],[0.,0.]]
+	for i in range(2):
+		for j in range(len(jac)):
+			for k in range(len(jac)):
+				for l in range(2):
+					poleComaJac[i][l] += jac[j][i]*jac[k][l]*fitter.MINUITcoma[j][k]
+	print " - - - - - - le compaire coma  - - - - - - "
+	print poleComaJac, poleComa
+	print " - - - - - - le compaire coma  - - - - - - "
+
+	with open(resultFile,'a') as outFile:
+		outFile.write('\n'+BWstring+" "+resSting)
+
+	res = scipy.optimize.minimize(Kmatrix.absInverse,[mPrime**2,mPrime*Gprime])
+	print res.x,"pole position"
+	resSting = str(res.fun)+ " function value should be zero"
+	print resSting
+	BWstring = "BW' par: "+str(abs(res.x[0])**.5)+" "+str(abs(res.x[1])/abs(res.x[0])**.5)+" (all absolute values)"
+	print BWstring
+	with open(resultFile,'a') as outFile:
+		outFile.write('\n'+BWstring+" "+resSting)
+#       # - - - - --- Start the evaluations here --- - - - - #       #
+	doPlots = False
+	if doPlots:
+		RV = fitter.produceResultViewer(zeroModeParameters,"1++0+[pi,pi]1--PiS", noRun = True, plotTheory = True)
+		RV.plotData = True
+		for b in range(startBin, stopBin):
+			plotNameBase = "./Kmatrix_plots/1pp0p1mmPiS_<mode>_"+str(b)+"_"+str(tBin)+".pdf"
+			RV.writeBinToPdf(b, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
+#	raw_input("press <enter> to exit")
+	return
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
+#################################################################################
+#################################################################################
+
+
 #	fit1500 = doFit1500(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave, writeResultToFile = "1pp_f0_1500_massesAndWidths_global.dat")
 
 	print "Start with fixed shape f0"
@@ -303,10 +579,11 @@ def main():
 	allMethods["fixedShapeF0"] = fixedShapeF0
 	print "Finished with fixed shape f0"
 
-#	print "Start with fixed shape rho"
-#	fixedShapeRho = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins,referenceWave = referenceWave)
-#	allMethods["fixedShapeRho"] = fixedShapeRho
-#	print "Finished with fixed shape rho"
+	print "Start with fixed shape rho"
+	fixedShapeRho = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins,referenceWave = referenceWave)
+	allMethods["fixedShapeRho"] = fixedShapeRho
+	print "Finished with fixed shape rho"
+
 
 #	print "Start with restricted rho (1 Gamma)"
 #	fixedShapeRho1G = doFixedShapes(inFileName, sectors[1:], startBin, stopBin, tBins, sectorRangeMap = {"1++0+[pi,pi]1--PiS":(mRho - Grho, mRho+Grho)},referenceWave = referenceWave)
@@ -322,6 +599,13 @@ def main():
 	fixedShapes = doFixedShapes(inFileName, sectors, startBin, stopBin, tBins,referenceWave = referenceWave)
 	allMethods["fixedShapes"] = fixedShapes
 	print "Finished with fixed shapes"
+
+#	totalHists = fixedShapes.getTotalHists(fixedShapeRho.getZeroModeParametersForMode())
+#	with root_open("./totals_1pp_onlyFixedRho.root", "UPDATE") as outFileRoot:
+#		for t in totalHists:
+#			for m in t:
+#				m.Write()
+#	return
 
 #	totalHists = fixedShapes.getTotalHists(cloneZeros(fixedShapes.getZeroModeParametersForMode()))
 #	with root_open("./totals_1pp_noCorr.root", "UPDATE") as outFileRoot:
@@ -416,15 +700,15 @@ def main():
 				prrs[j] += weight * params[m][0][i][j]
 		resolvedWeightedSum[0].append(prrs)
 
-	b    = 40
-	sect = "1++0+[pi,pi]1--PiS"
-	s    = 1
+#	b    = 40
+#	sect = "1++0+[pi,pi]1--PiS"
+#	s    = 1
 #	allMethods['fixedShapes'].removeAllCorrelations()
 #	allMethods['fixedShapes'].calculateNonShapeParametersForZeroModeParameters(resolvedWeightedSum)
-	rv = allMethods['fixedShapes'].produceResultViewer(resolvedWeightedSum,s, noRun = True, plotTheory = True, removeZM = False)
-	rv.writeBinToPdf(b, stdCmd = ["", sect + "_data_intens_"+str(b)+"_"+str(tBin)+".pdf", [], sect + "_data_argand_"+str(b)+"_"+str(tBin)+".pdf", []])
-	rv.wiriteReImToPdf(b, sect + "_data_<ri>_"+str(b)+"_"+str(tBin)+".pdf" )
-	return
+#	rv = allMethods['fixedShapes'].produceResultViewer(resolvedWeightedSum,s, noRun = True, plotTheory = True, removeZM = False)
+#	rv.writeBinToPdf(b, stdCmd = ["", sect + "_data_intens_"+str(b)+"_"+str(tBin)+".pdf", [], sect + "_data_argand_"+str(b)+"_"+str(tBin)+".pdf", []])
+#	rv.wiriteReImToPdf(b, sect + "_data_<ri>_"+str(b)+"_"+str(tBin)+".pdf" )
+#	return
 
 	evals = {}
 	for i,m in enumerate(studyList):
@@ -465,19 +749,19 @@ def main():
 	style.titleLeft  = LaTeX_strings.tBins[tBin]
 
 
-	with modernplotting.toolkit.PdfWriter("studies_1pp_data"+str(tBin)+studyAdder+plotDataType) as pdfOutput:
-		plot = style.getPlot2D()
-		plot.axes.get_xaxis().set_ticks([(i + 0.5) for i in range(len(studyList)+2)])
-		plot.axes.get_yaxis().set_ticks([(i + 0.5) for i in range(len(studyList))])
-		studyPlotter.makeValuePlot(plot, hist)
-
-		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(unCorrected_string)
-		axolotl.append(weightedAVG_string)
-		plot.axes.set_xticklabels(axolotl, rotation = 90)
-		plot.setZlim((0.,1.))
-
-		pdfOutput.savefigAndClose()
+#	with modernplotting.toolkit.PdfWriter("studies_1pp_data"+str(tBin)+studyAdder+plotDataType) as pdfOutput:
+#		plot = style.getPlot2D()
+#		plot.axes.get_xaxis().set_ticks([(i + 0.5) for i in range(len(studyList)+2)])
+#		plot.axes.get_yaxis().set_ticks([(i + 0.5) for i in range(len(studyList))])
+#		studyPlotter.makeValuePlot(plot, hist)
+#
+#		plot.axes.set_yticklabels(axolotl)
+#		axolotl.append(unCorrected_string)
+#		axolotl.append(weightedAVG_string)
+#		plot.axes.set_xticklabels(axolotl, rotation = 90)
+#		plot.setZlim((0.,1.))
+#
+#		pdfOutput.savefigAndClose()
 
 #	return
 
@@ -494,8 +778,8 @@ def main():
 	doF0Fits       = False
 	doFits1500     = False
 	doOmnesFit     = False
-	doRhoFits      = True
-	doRhoPrimeFits = True
+	doRhoFits      = False
+	doRhoPrimeFits = False
 
 	if doF0fitGlobal:
 		deg = 1
@@ -669,13 +953,18 @@ def main():
 		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
 		rv = allMethods['fixedShapes'].produceResultViewer(resolvedWeightedSum,s, noRun = True, plotTheory = True)
 		rv.writeBinToPdf(startBin, stdCmd = [folder + sect + "_data_2D_"+str(tBin)+plotDataType, "", [], "", []])
-
+		rv.plotData = True
 		for b in range(startBin, stopBin):
 			intensNames = [name+".intens" for name in fileNames[sect,b]]
 			argandNames = [name+".argand" for name in fileNames[sect,b]]
 #			intensNames = []
 #			argandNames = []
-			rv.plotData = True
+
+
+			rv.writeAmplFiles(b,0,"./filesForMisha/"+sect+"_m"+str(b)+"_t"+str(tBin)+"_corrected")
+			rv.writeAmplFiles(b,1,"./filesForMisha/"+sect+"_m"+str(b)+"_t"+str(tBin)+"_uncorrect")
+			continue
+
 			rv.writeBinToPdf(b, stdCmd = ["", folder + sect + "_data_intens_"+str(b)+"_"+str(tBin)+plotDataType, intensNames,  folder + sect + "_data_argand_"+str(b)+"_"+str(tBin)+plotDataType, argandNames])
 	print studyList
 	print cumulWeights

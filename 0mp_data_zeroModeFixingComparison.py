@@ -362,19 +362,19 @@ def main():
 	style.titleRight = r"$0^{-+}0^+$"
 	style.titleLeft  = LaTeX_strings.tBins[tBin]
 
-	with modernplotting.toolkit.PdfWriter("studies_0mp_data"+str(tBin)+studyAdder+".pdf") as pdfOutput:
-		plot = style.getPlot2D()
-		plot.axes.get_xaxis().set_ticks([(i + 0.5) for i in range(len(studyList)+2)])
-		plot.axes.get_yaxis().set_ticks([(i + 0.5) for i in range(len(studyList))])
-		studyPlotter.makeValuePlot(plot, hist)
+#	with modernplotting.toolkit.PdfWriter("studies_0mp_data"+str(tBin)+studyAdder+".pdf") as pdfOutput:
+#		plot = style.getPlot2D()
+#		plot.axes.get_xaxis().set_ticks([(i + 0.5) for i in range(len(studyList)+2)])
+#		plot.axes.get_yaxis().set_ticks([(i + 0.5) for i in range(len(studyList))])
+#		studyPlotter.makeValuePlot(plot, hist)
 
-		plot.axes.set_yticklabels(axolotl)
-		axolotl.append(unCorrected_string)
-		axolotl.append(weightedAVG_string)
-		plot.axes.set_xticklabels(axolotl, rotation = 90)
-		plot.setZlim((0.,1.))
+#		plot.axes.set_yticklabels(axolotl)
+#		axolotl.append(unCorrected_string)
+#		axolotl.append(weightedAVG_string)
+#		plot.axes.set_xticklabels(axolotl, rotation = 90)
+#		plot.setZlim((0.,1.))
 
-		pdfOutput.savefigAndClose()
+#		pdfOutput.savefigAndClose()
 
 
 	with open("studies_0mp_data"+str(tBin)+studyAdder+".txt",'w') as out:
@@ -555,15 +555,20 @@ def main():
 		rv = allMethods['fixedShapes'].produceResultViewer(resolvedWeightedSum,s, noRun = True, plotTheory = True)
 
 		rv.writeBinToPdf(startBin, stdCmd = [folder + sect + "_data_2D_"+str(tBin)+".pdf", "", [], "", []])
+		rv.plotData = True
 		for b in range(startBin, stopBin):
-			if  not b == 32:
-				continue 
+#			if  not b == 32:
+#				continue 
 			rv.replaceFromRootFile("f0s.root",2)
 			intensNames = [name+".intens" for name in fileNames[sect,b]]
 			argandNames = [name+".argand" for name in fileNames[sect,b]]
 			intensNames = []
 			argandNames = []
-			rv.plotData = True
+
+			rv.writeAmplFiles(b,0,"./filesForMisha/"+sect+"_m"+str(b)+"_t"+str(tBin)+"_corrected")
+			rv.writeAmplFiles(b,1,"./filesForMisha/"+sect+"_m"+str(b)+"_t"+str(tBin)+"_uncorrect")
+			continue
+
 			rv.writeBinToPdf(b, stdCmd = ["", folder + sect + "_data_intens_"+str(b)+"_"+str(tBin)+".pdf", intensNames,  folder + sect + "_data_argand_"+str(b)+"_"+str(tBin)+".pdf", argandNames])
 	print studyList
 	print cumulWeights

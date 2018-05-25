@@ -156,7 +156,7 @@ def scaleHist(hist, factor):
 			hist.SetBinError(x+1,y+1,hist.GetBinError(x+1,y+1)*factor)
 
 class resultViewer:
-	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 34, startCommand = "", reImCorrel = None, noRun = False, showPlots = None):
+	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 34, startCommand = None, reImCorrel = None, noRun = False, showPlots = None):
 		pyRootPwa.ROOT.gStyle.SetOptStat(0)
 		self.nHists       = len(intensHists)
 		if self.nHists < 1:
@@ -181,11 +181,13 @@ class resultViewer:
 
 		self.lineArgs = {'marker': None, 'linestyle':'dashed', 'markersize':0, 'linewidth':.4, 'zorder' :0, 'color':'.5'}
 
-		self.plotCorr   = True
-		self.plotTheo   = True
-		self.plotData   = True
-		self.noEllipse  = False
+		self.plotCorr     = True
+		self.plotTheo     = True
+		self.plotData     = True
+		self.noEllipse    = False
+		self.XcheckArgand = False
 
+		self.addiXoffset = None
 
 		self.mMin = 0.27
 		self.mMax = 1.94
@@ -194,15 +196,21 @@ class resultViewer:
 		self.realLabel   = LaTeX_strings.real
 		self.imagLabel   = LaTeX_strings.imag
 		self.m2PiString  = LaTeX_strings.m2Pi
+		self.m3PiString  = LaTeX_strings.m3Pi
+
+		self.scaleArgandZeroLine = 1.
+		self.titleFontSize       = 13
+		self.showColorBar        = False
 
 		self.makeLegend        = False
 		self.legendCorrected   = r"Corrected zero mode"
 		self.legendUncorrected = r"Uncorrected zero mode"
 		self.legendFixed       = r"Fixed shape"
 		self.legendMethods     = r"Single methods"
+		self.twoDtitleLeft       = None
 
 		self.noRun = noRun
-		if not showPlots:
+		if showPlots is None:
 			self.showPlots = [True, True, False, False, False]
 		else:
 			if not len(showPlots) == 5:
@@ -224,7 +232,7 @@ class resultViewer:
 		self.tStringXpos = 0.017
 		self.tStringYpos = 0.93
 
-		if not startCommand == "":
+		if startCommand is not None:
 			if startCommand.startswith("wq:"):
 				fileName = startCommand[3:]
 				self.writeAmplFiles(self.bin, fileName = fileName)
@@ -320,7 +328,7 @@ class resultViewer:
 		for hist in self.imagHists:
 			scaleHist(hist, factor**.5)
 		scaleHist(self.reImCorrel, factor)
-		self.scaleFakk = factor
+		self.scaleFakk *= factor
 
 	def getArgand(self, nBin, index = 0):
 		if index >= self.nHists:
@@ -352,7 +360,7 @@ class resultViewer:
 		return argand
 
 	def getArgandData(self, nBin, index, getCOMA = False):
-		if not self.reImCorrel and getCOMA:
+		if getCOMA and self.reImCorrel is None:
 			raise RuntimeError("Can not get COMA with no reImCorrel-histogram set")
 		reals = []
 		imags = []
@@ -410,7 +418,6 @@ class resultViewer:
 		return maxLine, minLine
 
 	def drawBin(self, nBin):
-#		print "|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
 		self.intensCanvas.cd()
 		self.intensCanvas.Clear()
 		maxLine, minLine = self.getMarkerLines(nBin)
@@ -509,28 +516,44 @@ class resultViewer:
 	def getLaTeXMassString(self, nBin):
 		if not self.overrideMassString == "":
 			return self.overrideMassString
-#		print "r3m0ve 7hi5 h4ck......"
-#		return ""
 		mMin = self.intensHists[0].GetXaxis().GetBinLowEdge(nBin+1)
-		mMax = self.intensHists[0].GetXaxis().GetBinUpEdge(nBin+1)
+		mMax = self.intensHists[0].GetXaxis().GetBinUpEdge( nBin+1)
 		retVal = LaTeX_strings.getMassString(mMin, mMax)
 		return retVal
 
 	def writeBinToPdf(self, nBin, stdCmd = None):
 		style = modernplotting.mpplot.PlotterStyle()
+
+		xSize1 = 4.
+		xSize2 = 5.
+		ySize  = 4.
+
+		style.p1dFigSize = (xSize1,ySize)
+		style.p2dFigSize = (xSize2,ySize)
+
+		style.setFixed1DAxisPos(0.19, 0.16, 0.77, 0.77)
+		style.setFixed2DAxisPos(0.19*xSize1/xSize2, 0.16, 0.655, 0.77)
+
+		style.setFontSize(self.titleFontSize)
+
+#		if self.showColorBar:
+#			style.p2dFigSize = np.array([style.p2dFigSize[0]*1.25, style.p2dFigSize[1]])
+#			style.p2dAxisPos[0] /= 1.25
+
 		style.errorEllipsesEdgeColor = modernplotting.colors.makeColorLighter(self.corrColor, .5)
 		style.errorEllipsesFaceColor = modernplotting.colors.makeColorLighter(self.corrColor, .5)
 		style.finishPreliminary      = self.printLiminary
 
-#		style.titleLeft = "Uncorrected"
+		if self.twoDtitleLeft is not None:
+			style.titleLeft	= self.twoDtitleLeft
 
 		if not self.titleRight == "":
 			style.titleRight = self.titleRight
 
-		if stdCmd:
+		if stdCmd is not None:
 			if not len(stdCmd) == 5:
 				raise IndexError("Wrong number of standard commands")
-		if stdCmd:
+		if stdCmd is not None:
 			twoDimPlotName = stdCmd[0]
 		else:
 			twoDimPlotName = raw_input("Name of the 2D plot:")
@@ -542,17 +565,18 @@ class resultViewer:
 			with modernplotting.toolkit.PdfWriter(twoDimPlotName) as pdfOutput:
 				plot = style.getPlot2D()
 				modernplotting.root.plotTH2D(self.intensHists[0], plot, maskValue = 0.)
-#				plot.setZshowColorBar()
-#				plot.colorbar.ax.yaxis.offsetText.set_position((4.,1.))
-#				plot.colorbar.formatter.set_powerlimits((2, 6))
+				if self.showColorBar:
+					plot.setZshowColorBar()
+					plot.colorbar.ax.yaxis.offsetText.set_position((4.,1.))
+					plot.colorbar.formatter.set_powerlimits((2, 6))
 				plot.setZlim((0., self.intensHists[0].GetMaximum()))
-				plot.setXlabel(LaTeX_strings.m3Pi)
+				plot.setXlabel(self.m3PiString)
 				plot.setYlabel(self.m2PiString)
-				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
+				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes, size = self.titleFontSize)
 
 				plot.finishAndSaveAndClose(pdfOutput)
 				
-		if stdCmd:
+		if stdCmd is not None:
 			slicePlotName = stdCmd[1]
 			addFiles      = stdCmd[2]
 		else:
@@ -572,7 +596,6 @@ class resultViewer:
 					print "Invalid file name given: '" + slicePlotName + "'"
 
 		style.titleLeft = self.getLaTeXMassString(nBin)
-#		style.titleLeft = r"Monte Carlo"
 
 		handlers = []
 		legends  = []
@@ -588,8 +611,6 @@ class resultViewer:
 		if len(addFiles) > 0:
 			handlers.append(matplotlib.patches.Patch(color = self.addiColor))
 			legends.append(self.legendMethods)
-
-
 
 		pointLabels     = {}
 		for i in self.labelPoints:
@@ -610,15 +631,15 @@ class resultViewer:
 						break
 				if firstUpperBinBorder == -1.:
 					raise ValueError("Could not determine upper limit")
-				for fn in addFiles:
-					hist = parseTH1D(fn, self.scaleFakk)
-					modernplotting.root.plotTH1D(hist, plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':0, 'color':self.addiColor})
 				if self.plotData:
 					modernplotting.root.plotTH1D(hists[1], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':1, 'color':self.dataColor})
 				if len(hists) > 2 and self.plotTheo:
 					modernplotting.root.plotTH1D(hists[2], plot, markerDefinitions = { 'zorder':2, 'color': self.theoColor})
 				if self.plotCorr:
 					modernplotting.root.plotTH1D(hists[0], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':3, 'color':self.corrColor})
+				for fn in addFiles:
+					hist = parseTH1D(fn, self.scaleFakk, addX = self.addiXoffset)
+					modernplotting.root.plotTH1D(hist, plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':0, 'color':self.addiColor})
 				plot.setXlabel(self.m2PiString)
 #				plot.setXlim(self.mMin,self.mMax)
 				plot.setXlim(self.mMin,firstUpperBinBorder)
@@ -631,13 +652,13 @@ class resultViewer:
 				else:
 					raise RuntimeError("Unknwons scale option '" + self.scaleTo + "'")
 				
-				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
+				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes, size = self.titleFontSize)
 
 				if self.makeLegend:
-					plot.fig.legend(handlers, legends, fontsize = "x-small",loc =0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=(0.19, 0.16, 0.77, 0.77))	
+					plot.fig.legend(handlers, legends, fontsize = "x-small",loc =0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=style.p1dAxisPos)	
 
 				plot.finishAndSaveAndClose(pdfOutput)
-		if stdCmd:
+		if stdCmd is not None:
 			argandPlotName = stdCmd[3]
 			addFiles       = stdCmd[4]
 			for fn in addFiles:
@@ -670,30 +691,33 @@ class resultViewer:
 					for fn in addFiles:
 						graph = parseTGraph(fn, self.scaleFacc**.5)
 						addGraphs.append(graph)
-						modernplotting.root.plotTH1D(graph, plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 0, 'color':self.addiColor})
+						modernplotting.root.plotTH1D(graph,plot,yErrors=True,xErrors=True,maskValue=0.,markerDefinitions={'linestyle':'solid','linewidth':.2,'zorder':0,'color':self.addiColor})
 					if self.plotData:
-						modernplotting.root.plotTH1D(argands[1], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 2, 'color':self.dataColor})
+						modernplotting.root.plotTH1D(argands[1],plot,yErrors=True,xErrors=True,maskValue=0.,markerDefinitions={'linestyle':'solid','linewidth':.2,'zorder':2,'color':self.dataColor})
 					if len(argands) > 2 and self.plotTheo:
-						modernplotting.root.plotTH1D(argands[2], plot, maskValue = 0.,markerDefinitions = {'marker' : None, 'linestyle' : 'solid', 'zorder' : 1, 'color': self.theoColor, 'linewidth' : 1.})
+						modernplotting.root.plotTH1D(argands[2],plot,maskValue=0.,markerDefinitions={'marker':None,'linestyle':'solid','zorder':1,'color':self.theoColor,'linewidth':1.})
 					if self.plotCorr:
-						modernplotting.root.plotTH1D(argands[0], plot, yErrors = True, xErrors = True, maskValue = 0., markerDefinitions = {'marke': None, 'linestyle' : 'solid', 'linewidth' : .2, 'zorder' : 3, 'color':self.corrColor})
+						modernplotting.root.plotTH1D(argands[0],plot,yErrors=True,xErrors=True,maskValue=0.,markerDefinitions={'marke':None,'linestyle':'solid','linewidth':.2,'zorder':3,'color':self.corrColor})
 					ranges   = setAxesRange(argands[0])
 				else:
 					ranges   = setAxesRange(self.getArgand(nBin, 0))
 					for fn in addFiles:
 						X,EX,Y,EY = parseArgand(fn, skipZero = True, fakk = self.scaleFakk**.5)
 						hasAdd = True
-						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 2, 'color':self.addiColor})
+						if not self.XcheckArgand:
+							plot.plot(X,Y,**{'linestyle':'solid','linewidth':.7,'zorder':2,'color':self.addiColor})
+						else:
+							plot.plot(X,Y,**{'linestyle':'solid','linewidth':.0,'zorder':5,'color':'red','markersize':2.,'markeredgecolor':'none'}) # here here ololo
 					if self.plotData:
 						X,Y,COMA = self.getArgandData(nBin, 1, getCOMA = False)
 #						print "data"
 #						print X
 #						print Y
 #						print "/data"
-						plot.plot(X, Y, **{'linestyle' : 'solid', 'linewidth' : .7, 'zorder' : 3, 'color':self.dataColor})
+						plot.plot(X, Y,**{'linestyle':'solid','linewidth':.7,'zorder':3,'color':self.dataColor})
 					if self.nHists > 2 and self.plotTheo:
-						X,Y,COMA = self.getArgandData(nBin, 2, getCOMA = False)
-						plot.plot(X, Y, **{'marker' : None, 'markersize' : 0., 'linestyle' : 'solid', 'linewidth' : 1.,  'zorder' : 2, 'color': self.theoColor})
+						X,Y,COMA = self.getArgandData(nBin,2,getCOMA=False)
+						plot.plot(X, Y, **{'marker':None,'markersize':0.,'linestyle':'solid','linewidth':1.,'zorder':2,'color':self.theoColor})
 						if len(self.connectPoints) > 0:
 							XD, YD, CD = self.getArgandData(nBin, 0, getCOMA = True)
 							for p in self.connectPoints:
@@ -703,12 +727,11 @@ class resultViewer:
 								plot.plot([X[p],XD[p]],[Y[p],YD[p]], markersize = 0., color = 'k', linewidth = 0.1 )
 					if self.plotCorr:
 						X,Y,COMA = self.getArgandData(nBin, 0, getCOMA = True)
-#						print "corr"
-#						print X
-#						print Y
-#						print "/corr"
+#						with open("coma_from_the_rv_C.dat",'w') as outFile:
+#							for i in range(len(X)):
+#								outFile.write(str(COMA[i][0][0])+' '+str(COMA[i][0][1])+' '+str(COMA[i][1][1])+'\n')
 
-						modernplotting.specialPlots.plotErrorEllipses(plot, X, Y, COMA, markerDefinitions = {'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 1, 'color' : self.corrColor, 'markersize' : 0.})
+						modernplotting.specialPlots.plotErrorEllipses(plot,X,Y,COMA,markerDefinitions={'linestyle':'solid','linewidth':1.,'zorder':1,'color':self.corrColor,'markersize':0.})
 						plot.plot(X,Y, **{'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 4, 'color' : self.corrColor})
 						for i in pointLabels:
 							if i < len(X):
@@ -717,7 +740,7 @@ class resultViewer:
 								if i in self.shiftMap:
 									x += self.shiftMap[i][0]
 									y += self.shiftMap[i][1]
-								plot.axes.text(x,y,pointLabels[i])
+								plot.axes.text(x,y,pointLabels[i],size = self.titleFontSize)
 
 
 				if self.scaleTo == "corr":
@@ -728,13 +751,13 @@ class resultViewer:
 					raise RuntimeError("Unknwons scale option '" + self.scaleTo + "'")
 
 				if self.makeLegend:
-					plot.fig.legend(handlers, legends, fontsize = "x-small",loc =0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=(0.19, 0.16, 0.77, 0.77))	
+					plot.fig.legend(handlers, legends, fontsize = "x-small",loc = 0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=style.p1dAxisPos)	
 				plot.setXlabel(self.realLabel)
 				plot.setYlabel(self.imagLabel)
 				plot.axes.yaxis.offsetText.set_position((-.15,1.))
 				plot.axes.xaxis.offsetText.set_position((1.05,0.))
-				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
-				fakk = .1
+				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes,size = self.titleFontSize)
+				fakk   = .1
 				yRange = (ranges[1][0], ranges[1][1] +  fakk*(ranges[1][1] - ranges[1][0]))
 
 				if self.xticks:
@@ -749,18 +772,24 @@ class resultViewer:
 				plot.setYlim(yRange)
 
 				plot.plot([ranges[0][0],ranges[0][1]],[0.,0.], **self.lineArgs)
-				plot.plot([0.,0.],[yRange[0],yRange[1]], **self.lineArgs)
+				plot.plot([0.,0.],[yRange[0],yRange[0] + (yRange[1]-yRange[0])*self.scaleArgandZeroLine],**self.lineArgs)
 
 				plot.finishAndSaveAndClose(pdfOutput)
+		print "Finished with creating .pdf-files"
 
 	def wiriteReImToPdf(self, nBin, outFileName = None):
 		style = modernplotting.mpplot.PlotterStyle()
+		xSize1 = 4.
+		xSize2 = 5.
+		ySize  = 4.
+		style.setFixed1DAxisPos(0.19, 0.16, 0.77, 0.77)
+		style.setFixed2DAxisPos(0.19*xSize2/xSize1, 0.16, 0.77, 0.77)
 		style.finishPreliminary = self.printLiminary
 		style.titleLeft = self.getLaTeXMassString(nBin)
 		if not self.titleRight == "":
 			style.titleRight = self.titleRight
 
-		if not outFileName:
+		if outFileName is None:
 			while True:
 				outFileNameBase = raw_input("OutFileName (must contain <ri>):")
 				if not outFileNameBase.endswith(".pdf"):
@@ -806,7 +835,7 @@ class resultViewer:
 				if firstUpperBinBorder == -1.:
 					raise ValueError("Could not determine upper limit")
 				for fn in addFiles:
-					hist = parseTH1D(fn)
+					hist = parseTH1D(fn, addX = self.addiXoffset)
 					modernplotting.root.plotTH1D(hist, plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':0, 'color':self.addiColor})
 				if self.plotData:
 					modernplotting.root.plotTH1D(hists[1], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':1, 'color':self.dataColor})
@@ -818,9 +847,9 @@ class resultViewer:
 #				plot.setXlim(self.mMin,self.mMax)
 				plot.setXlim(self.mMin,firstUpperBinBorder)
 				if mode[0] == REAL:
-					plot.setYlabel(LaTeX_strings.real)
+					plot.setYlabel(self.realLabel)
 				elif mode[0] == IMAG:
-					plot.setYlabel(LaTeX_strings.imag)
+					plot.setYlabel(self.imagLabel)
 				plot.axes.yaxis.offsetText.set_position((-.15,1.))
 				if self.scaleTo == "corr":
 					maxx = hists[0].GetMaximum()
@@ -836,10 +865,10 @@ class resultViewer:
 				else:
 					raise RuntimeError("Unknwons scale option '" + self.scaleTo + "'")
 			
-				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes)
+				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes,size = self.titleFontSize)
 
 				if self.makeLegend:
-					plot.fig.legend(handlers, legends, fontsize = "x-small",loc =0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=(0.19, 0.16, 0.77, 0.77))	
+					plot.fig.legend(handlers, legends, fontsize = "x-small",loc =0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=style.p1dAxisPos)	
 
 				plot.finishAndSaveAndClose(pdfOutput)
 
