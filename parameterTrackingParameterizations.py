@@ -76,7 +76,7 @@ def lookupOmnes(s):
 class parametersTrackingParameterization:
 	def setParameters(self, params):
 		if not len(params) == self.nPar:
-			raise IndexError("Number of parameters does not match")
+			raise IndexError("Number of parameters does not match "+str(len(params))+" vs "+str(self.nPar))
 		count = 0
 		for i,v in enumerate(self.loadMap):
 			if v:
@@ -255,7 +255,17 @@ class binnedPolynomial(parametersTrackingParameterization):
 			raise ValueError("Mass m = "+str(m)+" out of range: "+str(self.mMin) +" < m < "+str(self.mMax))
 		return int((m-self.mMin)/self.step)
 
-	
+class monomial(parametersTrackingParameterization):
+	def __init__(self, degree, parameters = []): # no base exponent, make the degre explicit here
+		self.degree  = degree
+		self.nParAll = 0
+		self.makeLoadMap(parameters)
+
+	def __call__(self, ms, externalKinematicVariables = []):
+		retVals = np.full((len(ms)),1., dtype = complex)
+		for i,m in enumerate(ms):
+			retVals[i] = m**self.degree
+		return retVals
 
 class multiply(parametersTrackingParameterization):
 	"""

@@ -146,6 +146,19 @@ class tBinHolder:
 			chi2 += self.bins[i].fixedZMPchi2(pars)
 		return chi2
 
+	def fixedZMPchi2_realCouplings(self, pars, phases):
+		"""
+		Returns a chi2 for the shape parameters and self.zeroModeParameters. The couplings are calculated. Sums over all bins in self.binsToEvaluate
+		"""
+		if len(self.binsToEvaluate) == 0:
+			raise RuntimeError("No bins to evaluate set")
+		chi2 = 0.
+		phasesPerTbin = len(phases)/len(self.binsToEvaluate)
+
+		for i,t in enumerate(self.binsToEvaluate):
+			chi2 += self.bins[t].fixedZMPchi2_realCouplings(pars, phases[i*phasesPerTbin:(i+1)*phasesPerTbin])
+		return chi2
+
 	def setBinsToEvalueate(self, tBinsToEvaluate,mBinsToEvaluate):
 		"""
 		Sets the t' and m bins to evaluate in "fitRho.fitShapeParametersForBinRange()" in the analysisclass

@@ -213,6 +213,19 @@ class allBins:
 			chi2 += self.massBins[i].fixedZMPchi2(pars)
 		return chi2
 
+	def fixedZMPchi2_realCouplings(self, pars, phases):
+		"""
+		Returns a chi2 for the shape parameters and self.zeroModeParameters. The couplings are calculated. Sums over all bins in self.binsToEvaluate
+		"""
+		if len(self.binsToEvaluate) == 0:
+			raise RuntimeError("No bins to evaluate set")
+		if not len(phases) == len(self.binsToEvaluate):
+			raise ValueError("Number of phases dies not match")
+		chi2 = 0.
+		for i,b in enumerate(self.binsToEvaluate):
+			chi2 += self.massBins[b].fixedZMPchi2_realCouplings(pars, phases[i])
+		return chi2
+
 	def setBinsToEvalueate(self, mBinsToEvaluate):
 		"""
 		Sets the m bins to evaluate in "fitRho.fitShapeParametersForBinRange()" in the analysisclass

@@ -1017,7 +1017,7 @@ class amplitudeAnalysis:
 				nnon += mm[1] + mm[2]
 				if first:
 					first = False
-					nPar = mm[3]
+					nPar  = mm[3]
 				else:
 					if not nPar == mm[3]:
 						raise ValueError("Number of parameters does not match")

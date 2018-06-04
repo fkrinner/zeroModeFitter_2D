@@ -5,8 +5,11 @@ import utils
 from utils import getZeroHistSectors, normVector, getZeroModeNumber, printZeroStructure
 import cmath
 from cmath import phase, pi
+from math import sin, cos
 from modes import INTENS, PHASE, REAL, IMAG, INTENSNORM, INTENSTHEO, REALTHEO, IMAGTHEO, PHASETHEO, REIMCORRELATION
 import sys
+
+import scipy
 
 def CMwrite(val):
 	with open("comaLog", 'a') as outFile:
@@ -317,6 +320,48 @@ class massBin:
 		else:
 			couplings = -np.dot(B, la.pinv(np.transpose(A) + A))
 		return np.dot(couplings, np.dot(A,couplings)) + np.dot(B,couplings) + C
+
+	def fixedZMPchi2_realCouplings(self, pars, phase, scan = True):
+		"""
+		Returns a chi2 for the shape parameters and self.zeroModeParameters. The real magnitudes of the couplings are calculated, they share a complex phase, which is given.
+		"""
+		if not self.hasZMP and self.nZero > 0:
+			raise RuntimeError("No zero mode parameters set")
+		if pars is not None:
+			self.setShapeParameters(pars)
+		
+		a,b,c = self.getOwnTheoryABC()
+
+		cosP  = cos(phase)
+		sinP  = sin(phase)
+
+		A     = np.zeros((self.nFunc, self.nFunc))
+		B     = np.zeros((self.nFunc))
+		C     = c
+		for i in range(2*self.nZero):
+			C    += b[i]*self.zeroModeParameters[i]
+			for j in range(2*self.nZero):
+				C += self.zeroModeParameters[i]*self.zeroModeParameters[j]*a[i,j]
+		for i in range(self.nFunc):
+			B[i] += cosP*b[2*self.nZero+2*i  ] 
+			B[i] += sinP*b[2*self.nZero+2*i+1]
+			for j in range(2*self.nZero):
+				B[i] += cosP*(a[2*self.nZero+2*i  ,j]+a[j,2*self.nZero+2*i  ])*self.zeroModeParameters[j]
+				B[i] += sinP*(a[2*self.nZero+2*i+1,j]+a[j,2*self.nZero+2*i+1])*self.zeroModeParameters[j]
+			for j in range(self.nFunc):
+				A[i,j] += cosP**2   * a[2*self.nZero + 2*i  , 2*self.nZero + 2*j  ]
+				A[i,j] += cosP*sinP * a[2*self.nZero + 2*i  , 2*self.nZero + 2*j+1]
+				A[i,j] += sinP*cosP * a[2*self.nZero + 2*i+1, 2*self.nZero + 2*j  ]
+				A[i,j] += sinP**2   * a[2*self.nZero + 2*i+1, 2*self.nZero + 2*j+1]
+
+		if self.ownPinv:
+			couplings = -np.dot(B, utils.pinv(np.transpose(A) + A, numLim = self.numLim))
+		else:
+			couplings = -np.dot(B, la.pinv(np.transpose(A) + A))
+
+		retVal = np.dot(couplings, np.dot(A,couplings)) + np.dot(B,couplings) + C
+
+		return retVal
 
 	def getFcnCplsABC(self, zeroModePars):
 		a,b,c = self.getOwnTheoryABC()

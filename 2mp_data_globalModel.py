@@ -16,6 +16,7 @@ import LaTeX_strings
 
 import consistencyUtils as cu
 from studyFileNames import fileNameMap
+from cmath import pi
 
 import modernplotting.mpplot
 import modernplotting.toolkit
@@ -24,7 +25,7 @@ import studyPlotter
 
 from random import randint, random
 import scipy
-
+from iminuit import Minuit
 from LaTeX_strings import unCorrected_string, weightedAVG_string
 
 def doFunctionFit(inFileName, funcs, startBin, stopBin, tBins, sectorRangeMap, referenceWave = "", writeResultToFile = None, acv = None, zeroModeParameters = None, ifn = None):
@@ -117,6 +118,25 @@ def doFixedShapes(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap 
 #	fixedShapes.removeGlobalPhaseFromComa()
 	return fixedShapes
 
+def explicit_MINUIT_function():
+	pass
+
+def function():
+	pass
+
+def MIGRAD(argString, lstString, function2):
+	global function
+	function = function2
+	command = "def eMf("+lstString+"):\n\treturn function(["+lstString+"])"
+	global explicit_MINUIT_function
+	exec command
+	explicit_MINUIT_function = eMf
+
+	command ="m = Minuit(explicit_MINUIT_function,"+argString+")"
+	exec command
+	print "Starting migrad"
+	m.migrad()
+
 def main():
 	checkLaTeX()
 	style = modernplotting.mpplot.PlotterStyle()
@@ -132,23 +152,23 @@ def main():
 			startBin = int(a.split("-")[1])
 			stopBin  = int(a.split("-")[2])
 		if a.startswith("tBins"):
-			tBins = range(int(a.split("-")[1]),int(a.split("-")[2]))
-
+			tMin  = int(a.split("-")[1])
+			tMax  = int(a.split("-")[2])
+			tBins = range(tMin, tMax)
 
 	nPol       = 3
 	for a in sys.argv:
 		if a.startswith("nPol"):
 			nPol = int(a[4:])
 
-	f2Re0     = mF2**2
-	f2Im0     = mF2*GF2
+	f2Re0   = mF2**2
+	f2Im0   = mF2*GF2
 
-	mPrime = 1.55
-	Gprime =  .2
+	mPrime  = 1.55
+	Gprime  =  .2
 
 	mPPrime = 1.91
-	Gpprime = .3
-
+	Gpprime =  .3
 
 	f2Mass     = ptc.parameter(mF2, "f2_mass")
 	f2Width    = ptc.parameter(GF2, "f2_width")
@@ -163,11 +183,8 @@ def main():
 	ppPoleReal = ptc.parameter(mPPrime**2, "f2ppRe")
 	ppPoleImag = ptc.parameter(mPPrime*Gpprime, "f2ppIm")
 
-
 #	poleRealPrime = ptc.parameter(mPrime**2, "rhoRePrime")
 #	poleImagPrime = ptc.parameter(mPrime*Gprime, "rhoImPrime")
-
-	seedint = randint(0,10000)
 
 	polyDeg_po = 3
 	for a in sys.argv:
@@ -187,6 +204,11 @@ def main():
 			useCM = True
 		if a == "rho":
 			useCM = False
+	if useCM:
+		psString = "CM"
+	else:
+		psString = "rho"
+
 	Kmatrix.use_CM = useCM
 
 	for a in sys.argv:
@@ -199,18 +221,45 @@ def main():
 	tFuncs = []
 	tpPoly = []
 	nKpar  = len(params)
+	KparValues = [p.value for p in params]
+	nKpar  = 0
 
+	funcs = []
+	for d in range(polyDegP+1):
+		mnm  = ptc.monomial(2*d)
+		func = ptc.multiply([Kmatrix, mnm])
+		funcs.append(func)
+	bfv = [	 1.591236,   0.234037,   2.419353,   0.005742,   3.702362,   0.000053,  -0.189620, 0.207497 ,-0.058921,0.517699,0.166935 ,0.181275,0.959202 , 1.528309, 0.501027, -1.146739,-0.535555,  0.417481, -0.419879,  1.561247,
+		 0.120558,   1.059373,   0.393481,  -0.283450,  -0.182751,  -0.667384,   0.619867,   0.343112, 0.069652 , 0.677225, -0.116518, -0.485594,  0.693124,  0.270239,  0.139340, -2.694811, -0.062632,  1.570524, 
+		-0.493674,  -2.409801,   0.394341,   0.421391,  -0.524359,   0.112583,   0.285943,  -0.166501, -0.408990, -0.010904,  0.088735,  0.117378,  0.166603, -0.949778,  0.500537, -1.352419, -0.639588, -2.139980, 
+		-0.146114,   1.877676,   1.025465,  -0.120469,   1.197397,   0.792957,  -0.507836,   0.354736, -0.571950, -0.439970,  0.635951,  1.119741,  1.078536, -1.707963, -0.894598, -0.379259, -0.256336,  1.811274,  
+		 0.460570,  -2.370441,  -1.519688,  -2.596059,  -1.472923,   0.329489,   0.963846,  -0.174265, 0.497754,  0.523653, -0.082330, -2.288272,  0.238584,  2.432317, -0.219072, -1.818075,  0.101130, -1.315669, 
+		-0.095197,   0.185721,  -0.468701,   1.150421,  -0.706067,   1.336765,   0.114122,  -2.514466, -1.292956,  0.909066, -0.136537, 1.579291,  0.917968,  0.519039,  0.560456,  -3.141557,  -0.919017,   1.034258,   
+		 0.651617,   0.414377,  -0.954656,   0.432315,  -0.250071,  -0.306383,  -0.916611,   0.241417,   0.196445,  -0.594122,  -0.610276,  -2.115296,  -1.232504,   0.210273,  -0.539883,   1.134149,   0.582253,  
+		-1.330798,  -1.189863,   2.000385,  -0.286371,   0.997649,  -0.268911,  -0.358648,   0.209653,   0.307646,   0.294261,   2.350279,  -0.342739,   1.010674,  -0.547855,  -1.715226,   0.599891,   0.567254,
+		-0.731444,   2.852883,  -0.398756,   2.450370,   0.296712,   0.499203,   0.284769,  -7.040768,  -1.148202,  -0.982813,   0.349752,  -6.325548,  -0.494806,   0.183253,   0.745206,   2.547205,   1.571422,
+		 0.713172,  -0.253361,   0.610771,   1.308658,   1.501376,   1.023860,   2.184354,   0.927320,   0.677329,   0.589890,   0.139710,   0.550017,  -0.702369,  -0.847349,  -0.729193,   0.541576,  -0.508911, 
+		 0.495425,   1.287986,  -0.364052,  -1.338609,   0.281415,   0.168475,   0.184298,  -0.904410,   0.193151,  -0.773044,   0.324601,   4.473005,   0.046860,  -0.359312,   0.368391,  -1.623123,   0.531775, 
+		 0.384091,   0.988951,  -0.779931,   0.030888,  -0.139630,  -0.264398,  -9.821342,  -1.601821,  -7.745628,  -2.010218,  -3.540738,  -0.067302,   0.153977,-1.635704]
+#	bestFitVals = [1.591236, 0.234037,2.419353 ,0.005742, 3.702362, 0.000053 , -0.189620 ,0.207497 ,-0.058921]
+	for p,par in enumerate(params):
+		par.value = bestFitVals[p]
+
+	phases = []
 	for tBin in tBins:
-		tParams = []
+#		tParams = []
 		for mBin in range(startBin,stopBin):
-			for d in range(polyDegP):
-				tParams.append(ptc.parameter(2*random()-1., "c"+str(d+1)+"_t"+str(tBin)+"_m"+str(mBin)))
-		nPpar   = len(tParams)
-		params += tParams
-		pPoly   = ptc.binnedPolynomial(tParams, mMin = mMin, mMax = mMax, nBins = stopBin-startBin, degree = polyDegP, baseExponent = 2, real = True)
-		tpPoly.append(pPoly)
-		func    = ptc.multiply([Kmatrix, pPoly])
-		tFuncs.append(func)
+			phases.append(ptc.parameter(2*pi*random(), "phi_t"+str(tBin)+"_m"+str(mBin)))
+#				tParams.append(ptc.parameter(2*random()-1., "c"+str(d+1)+"_t"+str(tBin)+"_m"+str(mBin)))
+#		nPpar   = len(tParams)
+#		params += tParams
+#		pPoly   = ptc.binnedPolynomial(tParams, mMin = mMin, mMax = mMax, nBins = stopBin-startBin, degree = polyDegP, baseExponent = 2, real = True)
+#		tpPoly.append(pPoly)
+#		func    = ptc.multiply([Kmatrix, pPoly])
+#		tFuncs.append(func)
+
+#	params += phases
+	params = phases
 
 	sector  =  "2-+0+[pi,pi]2++PiS"
 	sectors = ["2-+0+[pi,pi]0++PiD","2-+0+[pi,pi]1--PiP","2-+0+[pi,pi]1--PiF","2-+0+[pi,pi]2++PiS"]
@@ -219,33 +268,63 @@ def main():
 	zmPars         = []
 	fitters        = []
 	for t,tBin in enumerate(tBins):
-		fitter = amplitudeAnalysis(inFileName, sectors, {sector:[tFuncs[t]]}, startBin, stopBin, [tBin], sectorRangeMap = sectorRangeMap)
+		fitter = amplitudeAnalysis(inFileName, sectors, {sector:funcs}, startBin, stopBin, [tBin], sectorRangeMap = sectorRangeMap)
 		fitter.loadData(loadIntegrals = True, referenceWave = referenceWave)
 		fitter.finishModelSetup()
 		fitter.mode = AMPL
 
 		fixSectors = ["2-+0+[pi,pi]1--PiP", "2-+0+[pi,pi]1--PiF", "2-+0+[pi,pi]2++PiS"]
 		fixRangeMap = {
-			"2-+0+[pi,pi]1--PiP" : (0.,1.12),
-			"2-+0+[pi,pi]1--PiF" : (0.,1.12),
-			"2-+0+[pi,pi]2++PiS" : (0.,1.27) # Use only left side of f_2(1270)
+			"2-+0+[pi,pi]1--PiP" : (0.,1.12), 			"2-+0+[pi,pi]1--PiF" : (0.,1.12), 			"2-+0+[pi,pi]2++PiS" : (0.,1.27) # Use only left side of f_2(1270)
 		}
 
-		fixedShapes        = doFixedShapes(inFileName, fixSectors, startBin, stopBin, [tBin], referenceWave = referenceWave, sectorRangeMap = fixRangeMap)
+		fixedShapes = doFixedShapes(inFileName, fixSectors, startBin, stopBin, [tBin], referenceWave = referenceWave, sectorRangeMap = fixRangeMap)
 		fitter.setZeroModeParameters(fixedShapes.getZeroModeParametersForMode())
 		fitter.model.setBinsToEvalueate([0], range(stopBin-startBin)) # [0] since it is only one tBin in this fitter (one fitter par t' bin)
 		fitters.append(fitter)
 
+	nmBins = stopBin - startBin
 	def evalFunction(params):
-		Kmatrix.setParameters(params[:nKpar])
-		for t in range(len(tBins)):
-			tpPoly[t].setParameters(params[nKpar*t*nPpar:nKpar*(t+1)*nPpar])
+#		Kmatrix.setParameters(params[:nKpar])
 		chi2 = 0.	
 		for t in range(len(tBins)):
-			chi2 += fitters[i].fixedZMPchi2(None)
+#			chi2 += fitters[t].model.fixedZMPchi2(None)
+			chi2 += fitters[t].model.fixedZMPchi2_realCouplings(None, params[nKpar+t*nmBins:nKpar+(t+1)*nmBins])
+		return chi2
 
-	print evalFunction([p.value for p in params]), "gande gange gand gond gale"
+	argString = ','.join([p.name+'='+str(p.value) for p in params])
+	lstString = ','.join([p.name for p in params])
 
+	ndf  = 0
+	for fitter in fitters:
+		ndfs = fitter.model.getNDF()
+		for t in ndfs:
+			for m in t:
+				ndf += m[0] - m[1] - m[2]
+	ndf -= len(params)
+	ndf += polyDegP*(stopBin-startBin)*(tMax-tBin) # the couplings have jus a global phase !!!
+# # # # # # 2mpF2_Kmatrix_nPol3_rho_kPol0_pPol0-3_t3_m49-50_5854.dat
+
+	for att in range(10): # make 10 attempts at once
+		print "Setting Start Pars for attempt",att+1
+		for i in range(len(params)):
+			if i < nKpar:
+				params[i].value = KparValues[i]
+			else:
+				params[i].value = 2*pi*random()
+		MIGRAD(argString, lstString, evalFunction)
+
+		chi2 = explicit_MINUIT_function(*[p.value for p in params])
+
+		seedint = randint(0,10000)
+		resultFileName = "./globalKmatrixFits/2mpF2_nPol"+str(nPol)+"_"+psString+"_kPol"+str(polyDeg_po-1) + "_t"+str(tMin)+'-'+str(tMax)+"_m"+str(startBin)+"-"+str(stopBin)+"_polyDegP"+str(polyDegP)+"_"+str(seedint)+".dat"
+
+		with open(resultFileName, 'w') as outFile:
+			outFile.write("- - - - parameters - - - -\n")
+			for p in params:
+				outFile.write(str(p)+'\n')
+			outFile.write(" - - - - - fit - - - - -\nchi2/NDF: "+str(chi2)+"/"+str(ndf)+"="+str(chi2/ndf)+'\n')
+			outFile.write("ndf corrected!!!")
 	return
 
 	parameters = []
@@ -276,9 +355,7 @@ def main():
 	if fixZeroMode:
 		fixSectors = ["2-+0+[pi,pi]1--PiP", "2-+0+[pi,pi]1--PiF", "2-+0+[pi,pi]2++PiS"]
 		fixRangeMap = {
-			"2-+0+[pi,pi]1--PiP" : (0.,1.12),
-			"2-+0+[pi,pi]1--PiF" : (0.,1.12),
-			"2-+0+[pi,pi]2++PiS" : (0.,1.27) # Use only left side of f_2(1270)
+			"2-+0+[pi,pi]1--PiP" : (0.,1.12), 			"2-+0+[pi,pi]1--PiF" : (0.,1.12), 			"2-+0+[pi,pi]2++PiS" : (0.,1.27) # Use only left side of f_2(1270)
 		}
 
 		fixedShapes        = doFixedShapes(inFileName, fixSectors, startBin, stopBin, tBins, referenceWave = referenceWave, sectorRangeMap = fixRangeMap)
