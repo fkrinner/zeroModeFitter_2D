@@ -9,6 +9,8 @@ from time import sleep
 import scipy.optimize
 from rootfabi import root_open
 from globalDefinitions import mPi
+
+from rootfabi import root_open
 def fPlot(v):
 	return v.imag
 
@@ -62,7 +64,8 @@ def domtBin(tBin, mBin):
 		bestFn    = None
 		worstChi2 =-float('inf')
 #		folder    = "./KmatrixResults/"
-		folder    = "./KmatrixRestrictedZMfixing_allFourSectorsActive/"
+#		folder    = "./KmatrixRestrictedZMfixing_allFourSectorsActive/"
+		folder    = "./complexF2poles/"
 		m3Pi      = .5 + (mBin+.5)*.04
 		for fn in os.listdir(folder):
 			if not tString in fn:
@@ -97,6 +100,8 @@ def domtBin(tBin, mBin):
 	else:
 		inFileName = "./KmatrixResults/2mpF2_Kmatrix_nPol3_rho_kPol2_pPol7-4_t0_m40-50_9696.dat"
 
+	if len(allFileNames) == 0:
+		return
 
 	allFileNames.sort()
 	allFileNames.reverse()
@@ -220,12 +225,9 @@ def domtBin(tBin, mBin):
 #		sleep(.3)
 
 		first = False
-#	with root_open("./poleDistribution.root","RECREATE"):
-#		c2h_rho.Write()
-#		c2h_CM.Write()
-#		histAllPolePos.Write()
-#		histAllPolePos_CM.Write()
-#		histAllPolePos_rho.Write()
+	with root_open("./poleDistribution.root","RECREATE"):
+		histAllPolePos.Write()
+		hist.Write()
 #	raw_input("<enter> to exit")
 #	c1.Close()
 #	c2.Close()
@@ -237,7 +239,6 @@ c1      = ROOT.TCanvas()
 c2      = ROOT.TCanvas()
 
 def main():
-
 	for t in range(4):
 		for b in range(25, 40):
 			domtBin(t,b)

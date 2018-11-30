@@ -1,0 +1,84 @@
+1mp1p_Xchecked_pngs/
+4pp1p_Xchecked_pngs/
+Kmatrix_plots_pngs/
+collectedMethodsData/
+vectorFormFactor_lockRhoPrime_plots_pngs/
+vectorFormFactor_plots/
+vectorFormFactor_lockRhoPrime_plots_pngs/
+vectorFormFactor_plots/
+errorEsimationLogs/
+filesForRelease/
+fit_rho_plots_pngs/
+fixed_rho_plots_pngs/
+forPaper_Xcheck_pngs/
+forPaper_global_pngs/
+forPaper_pngs/
+massWidthPlots/
+resultFilesConsistency/
+results/
+vectorFormFactor_plots_1mp_pngs/
+vectorFormFactor_plots_pngs/
+
+*.pyc
+*.txt
+*.pdf
+*.png
+*.dat
+*.root
+*.zmc
+*.zip
+*.log
+*.tar.gz
+
+.swp
+0mp0pp_smooth-25-50
+0mp_rho_parameters
+argandLims
+argandLims_scale
+both0pp.argand
+both0pp.intens
+both1mm.argand
+both1mm.intens
+chi2comparisons
+cleanup
+commandsForFits
+commandsForFits3bins
+commandsForGlobalFits
+commandsForPlots
+commandsForResultViewer
+compLog
+compare
+intensYlims
+intensYlims_scale
+la
+manyCommands
+mmGG.deleteMe
+np
+omnes
+pc
+ptc
+pyRootPwa
+resultsFile
+rhoMassesAndWidthForTPrimeBins
+rhoRho3cpls_3pp
+scipy.optimize
+std11
+sys
+unnamed.C
+wavelist.allWaveList
+zeroModeCorrections_std11
+
+#	compareRanges.py
+#	makePhasePlots.py
+#	plotVFFresults.py
+#	omnesplot.py
+#	opp_data_zeroModeFixingComparison_copyForExotic.py
+#	parsePhases.py
+#	sheets.py
+#	tensorFormFactor.py
+#	vectorFormFactor.py
+#	vectorFormFactor2000.py
+#	vff_fit_severalBins.py
+#	analyze_BELLE.py
+#	analyze_vff.py
+

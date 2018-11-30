@@ -130,11 +130,12 @@ class parametersTrackingParameterization:
 				outFile.write(str(masses[i]) + ' ' + str(abs(vals[i])**2) + ' ' + str(vals[i].real) + ' ' + str(vals[i].imag) + ' ' + str(phase(vals[i])) + '\n')
 
 class simpleOneChannelKmatrix(parametersTrackingParameterization):
-	def __init__(self, parameters, nPole, polyDegPlusOne, sThresh):
+	def __init__(self, parameters, nPole, polyDegPlusOne, sThresh, nComplex = 0):
 		self.sThresh = sThresh
 		self.nPole   = nPole
+		self.nComx   = nComplex
 		self.pdpo    = polyDegPlusOne
-		self.nParAll = 2*nPole + polyDegPlusOne
+		self.nParAll = 2*nPole + 3*nComplex + polyDegPlusOne
 		self.makeLoadMap(parameters)
 
 		self.use_CM       = False
@@ -156,6 +157,9 @@ class simpleOneChannelKmatrix(parametersTrackingParameterization):
 			for p in range(self.nPole):
 				K     += par[count+1]/(par[count] - s)
 				count += 2
+			for p in range(self.nComx):
+				K += par[count+2]/(par[count] + 1.j*par[count+1] - s)
+				count += 3
 			for p in range(self.pdpo):
 				K     += par[count]*s**p
 				count += 1
@@ -173,13 +177,16 @@ class simpleOneChannelKmatrix(parametersTrackingParameterization):
 		for p in range(self.nPole):
 			K     += par[count+1]/(par[count] - s)
 			count += 2
+		for p in range(self.nComx):
+				K += par[count+2]/(par[count] + 1.j*par[count+1] - s)
+				count += 3
 		for p in range(self.pdpo):
 			K     += par[count]*s**p
 			count += 1
 		if not self.secondSheet:
 			return K/(1.-iRhoPS*K)
 		else:
-			iRhoPS = - (self.sThresh/s-1.+0.j)**.5
+#			iRhoPS = - (self.sThresh/s-1.+0.j)**.5
 			return K/(1.- K*(iRhoPS+2*(self.sThresh/s-1.+0.j)**.5))
 
 	def absInverse(self, reim):
@@ -198,9 +205,19 @@ class simpleOneChannelKmatrix(parametersTrackingParameterization):
 				first = False
 			retVal += '('+str(par[count+1].real)+")/("+str(par[count].real)+' - '+var+')'
 			count  += 2
+		for p in range(self.nComx):
+			if not first:
+				retVal += " + "
+			else:
+				first = False
+			retVal += '('+str(par[count+2].real)+")/("+str(par[count].real) + ' +i ' + str(par[count+1]) + ' - ' +var + ')'
+			count += 3
+			
 		for p in range(self.pdpo):
 			if not first:
 				retVal += " + "
+			else:
+				first = False
 			retVal += '(' + str(par[count].real) + ')'
 			count  += 1
 			if p == 1:

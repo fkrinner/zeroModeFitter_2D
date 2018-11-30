@@ -75,7 +75,6 @@ def chewMandelstam(s, m1, m2):
 	m1 = m1+0.j
 	m2 = m2+0.j
 	retVal  = -1./s*((m1+m2)**2-s)**.5 * ((m1-m2)**2-s)**.5
-	retValBad = retVal
 	retVal *=  log((((m1+m2)**2-s)**.5 + ((m1-m2)**2-s)**.5)/(2*(m1*m2)**.5))
 	retVal += (m1**2-m2**2)/(2*s)*log(m1/m2)
 	retVal -= (m1**2+m2**2)/(2*(m1**2-m2**2))*log(m1/m2)

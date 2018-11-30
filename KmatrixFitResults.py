@@ -28,6 +28,7 @@ class KmatrixFitResult:
 		self.coma       = None
 		self.BWresult   = None
 		self.sThresh    = 4*mPi**2
+		self.nCmx       = 0
 		for c in chunks:
 			if c.endswith(".dat"):
 				c = c[:-4]
@@ -53,6 +54,9 @@ class KmatrixFitResult:
 					self.nPol = int(c[4:])
 				else:
 					raise IOError("nPol set twice")
+			elif c.startswith("nCmx"):
+				self.nCmx = int(c[4:])
+
 			elif c.startswith('kPol'):
 				if self.kPol is None:
 					self.kPol = int(c[4:])
@@ -150,13 +154,13 @@ class KmatrixFitResult:
 		return mGcoma
 
 	def producePvector(self):
-		nPar    = 2*self.nPol + self.kPol + 1
+		nPar    = 2*self.nPol + self.kPol + 1 + 3*self.nCmx
 		pVector = twoDimensionalRealPolynomial(self.pPol[1],self.pPol[0], self.parameters[nPar:], baseExponent = 2)
 		return pVector
 
 	def produceFunction(self):
-		nPar   = 2*self.nPol + self.kPol + 1
-		retVal = simpleOneChannelKmatrix(self.parameters[:nPar], self.nPol, self.kPol+1, self.sThresh)
+		nPar   = 2*self.nPol  + self.kPol +  1 + 3*self.nCmx
+		retVal = simpleOneChannelKmatrix(self.parameters[:nPar], self.nPol, self.kPol+1, self.sThresh, nComplex = self.nCmx)
 		retVal.use_CM = self.phaseSpace == "CM"
 		return retVal
 

@@ -1,5 +1,5 @@
 import numpy as np
-import pyRootPwa
+#import pyRootPwa
 import physUtils
 
 def loadAmplitudeFile(ampFileName):
@@ -221,7 +221,7 @@ class rpwaBreitWignerInt(parameterization):
 
 		M0 = par[0].real
 		G0 = par[1].real
-		q0 = abs(pyRootPwa.core.breakupMomentumSquared(M0, self.m1, self.m2, True))**.5
+		q0 = abs(physUtils.breakupMomentumSquared(M0, self.m1, self.m2, True))**.5
 		if q0 == 0.:
 			return [0.]*len(ms)
 		retVals = np.zeros((len(ms)), dtype = complex)
@@ -239,22 +239,22 @@ class rpwaBreitWignerInt(parameterization):
 				if M + self.m3 >= externalKinematicVariables[0]:
 					Q = 0.
 				else:
-					Q = pyRootPwa.core.breakupMomentum(externalKinematicVariables[0],  M, self.m3)
+					Q = physUtils.breakupMomentum(externalKinematicVariables[0],  M, self.m3)
 
 				if M <= self.m1 + self.m2:
 					continue
-				q = pyRootPwa.core.breakupMomentum(M,  self.m1, self.m2)
+				q = physUtils.breakupMomentum(M,  self.m1, self.m2)
 				if self.weightBF:
 					try:
-						weight = (pyRootPwa.core.barrierFactorSquared(self.J, q)**.5*pyRootPwa.core.barrierFactorSquared(self.L, Q)**.5)
+						weight = (physUtils.barrierFactorSquared(self.J, q)**.5*physUtils.barrierFactorSquared(self.L, Q)**.5)
 					except ZeroDivisionError:
 						weight = 0.
 				elif self.weightIntens:
-					weight = abs(pyRootPwa.core.breitWigner(M, M0, G0, self.J, q, q0))**2
+					weight = abs(physUtils.breitWigner(M, M0, G0, self.J, q, q0))**2
 				else:
 					weight = 1.
 
-				ampl += pyRootPwa.core.breitWigner(M, M0, G0, self.J, q, q0) * weight
+				ampl += physUtils.breitWigner(M, M0, G0, self.J, q, q0) * weight
 				totalWeight += weight
 			retVals[i] = ampl/totalWeight
 		return retVals

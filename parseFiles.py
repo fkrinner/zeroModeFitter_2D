@@ -1,4 +1,5 @@
-import pyRootPwa
+#import pyRootPwa
+import ROOT
 import numpy as np
 
 def parseTH1D(fileName, fakk = 1., addX = None):
@@ -21,7 +22,7 @@ def parseTH1D(fileName, fakk = 1., addX = None):
 			binning[i] += addX
 
 	binning = np.asarray(binning, dtype = np.float64)
-	hist    = pyRootPwa.ROOT.TH1D('hist', 'hist', len(binning)-1, binning)
+	hist    = ROOT.TH1D('hist', 'hist', len(binning)-1, binning)
 	for i in range(len(vals)):
 		hist.SetBinContent(i+1, vals[i])
 		hist.SetBinError(  i+1, errs[i])
@@ -50,7 +51,7 @@ def parseArgand(fileName, skipZero = False, fakk = 1.):
 
 def parseTGraph(fileName, fakk = 1.):
 	X,EX,Y,EX = parseArgand(fileName, False, fakk)
-	graph = pyRootPwa.ROOT.TGraphErrors(len(X), X,Y,EX,EY)
+	graph = ROOT.TGraphErrors(len(X), X,Y,EX,EY)
 	return graph
 
 def main():

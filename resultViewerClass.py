@@ -3,7 +3,8 @@ matplotlib.use("Agg")
 
 from fabi import getch
 import plotfabi as pf
-import pyRootPwa
+#import pyRootPwa
+import ROOT
 import numpy as np
 import os, sys
 from modes import INTENS, PHASE, REAL, IMAG
@@ -21,13 +22,13 @@ import LaTeX_strings
 from cmath import phase
 
 def findMinBin(hist):
-	for i in range(0,hist.GetNbinsX()):
+	for i in xrange(0,hist.GetNbinsX()):
 		if not hist.GetBinContent(i+1,1) == 0.:
 			maxZeroBin = i-1
 			break
 	while True:
 		allZero = True
-		for i in range(hist.GetNbinsY()):
+		for i in xrange(hist.GetNbinsY()):
 			if not hist.GetBinContent(maxZeroBin + 1, i+1) == 0.:
 				allZero = False
 				break
@@ -150,14 +151,14 @@ def getStdCmd():
 		return ["", "intens_"+folder+suffix+".pdf", intenses, "argands_"+folder+suffix+".pdf", argands]
 
 def scaleHist(hist, factor):
-	for x in range(hist.GetNbinsX()):
-		for y in range(hist.GetNbinsY()):
+	for x in xrange(hist.GetNbinsX()):
+		for y in xrange(hist.GetNbinsY()):
 			hist.SetBinContent(x+1,y+1,hist.GetBinContent(x+1,y+1)*factor)
 			hist.SetBinError(x+1,y+1,hist.GetBinError(x+1,y+1)*factor)
 
 class resultViewer:
 	def __init__(self, intensHists, realHists, imagHists, phaseHists, startBin = 34, startCommand = None, reImCorrel = None, noRun = False, showPlots = None):
-		pyRootPwa.ROOT.gStyle.SetOptStat(0)
+		ROOT.gStyle.SetOptStat(0)
 		self.nHists       = len(intensHists)
 		if self.nHists < 1:
 			raise ValueError("No histograms given")
@@ -192,6 +193,9 @@ class resultViewer:
 		self.mMin = 0.27
 		self.mMax = 1.94
 
+		self.intYaxisXpos = None
+		self.argYaxisXpos = None
+
 		self.intensLabel = LaTeX_strings.intens
 		self.realLabel   = LaTeX_strings.real
 		self.imagLabel   = LaTeX_strings.imag
@@ -217,20 +221,41 @@ class resultViewer:
 				raise IndexError("'showPlots' invalid")
 			self.showPlots = showPlots[:]
 
-		self.connectPoints      = []
+		self.arrowsToTheo       = [] # Pairs of argand indices and the index of their respectictive point to receive an arrow from zero.
+
+		self.connectTheoPoints  = []
+		self.connectCorrPoints  = []
 		self.labelPoints        = []
 		self.shiftMap           = {}
+		self.intensLims         = {}
+		self.argandLims         = {}
+
 		self.yAxisShift         = 0.
 		self.xticks             = None
 		self.yticks             = None
+		self.markRange          = None
 
+		self.InMax = None
+		self.reMax = None
+		self.reMin = None
+		self.imMax = None
+		self.imMin = None
+
+		self.checkIntensRanges  = False
+		self.checkArgandRanges  = False
+		self.mark2DplotColor    = None
 
 		self.titleRight         = ""
 		self.tString            = ""
-		self.overrideMassString = ""
+		self.rightString        = None
+		self.overrideMassString = None
 
-		self.tStringXpos = 0.017
-		self.tStringYpos = 0.93
+		self.tStringXpos        = 0.017
+		self.tStringYpos        = 0.93
+		self.rightStringXpos    = 1.- 0.017
+
+		self.xLims              = None
+		self.connectAddGraphs   = []
 
 		if startCommand is not None:
 			if startCommand.startswith("wq:"):
@@ -246,7 +271,7 @@ class resultViewer:
 		self.sliceModes     = [ INTENS,          None,    PHASE,  REAL,  IMAG ]
 
 		if not self.noRun:
-			self.intensCanvas = pyRootPwa.ROOT.TCanvas("Intensity","Intensity")
+			self.intensCanvas = ROOT.TCanvas("Intensity","Intensity")
 			self.intensCanvas.SetWindowSize(500,500)
 			self.initSliceCanvasses()
 
@@ -269,6 +294,8 @@ class resultViewer:
 			for i,hist in enumerate(self.phaseHists):
 				hist.SetName("phase"+str(i))
 				hist.Write()
+			self.reImCorrel.SetName("reImCorrel")
+			self.reImCorrel.Write()
 
 	def replaceFromRootFile(self, rootFileName, index):
 		with root_open(rootFileName, "READ") as inFile:
@@ -297,10 +324,10 @@ class resultViewer:
 			self.phaseHists[index] = histPhase
 
 	def initSliceCanvasses(self):
-		for i in range(5):
+		for i in xrange(5):
 			if self.showPlots[i]:
 				if not self.sliceCanvasses[i]:
-					self.sliceCanvasses[i]  = pyRootPwa.ROOT.TCanvas(self.sliceNames[i],self.sliceNames[i])
+					self.sliceCanvasses[i]  = ROOT.TCanvas(self.sliceNames[i],self.sliceNames[i])
 					self.sliceCanvasses[i].SetWindowSize(500,500)
 			else:
 				if self.sliceCanvasses[i]:
@@ -309,7 +336,7 @@ class resultViewer:
 
 	def setShowPlots(self):
 		self.showPlots = []
-		for i in range(5):
+		for i in xrange(5):
 			while True:
 				ans = raw_input("Show "+self.sliceNames[i]+" slice? (y/n)")
 				if ans == "y":
@@ -337,7 +364,7 @@ class resultViewer:
 		imags = []
 		reErr = []
 		imErr = []
-		for i in range(self.binsY):
+		for i in xrange(self.binsY):
 			re  = self.realHists[index].GetBinContent(nBin + 1, i+1)
 			im  = self.imagHists[index].GetBinContent(nBin + 1, i+1)
 			reR = self.realHists[index].GetBinError(  nBin + 1, i+1)
@@ -348,13 +375,13 @@ class resultViewer:
 			imags.append(im)
 			reErr.append(reR)
 			imErr.append(imR)
-		argand = pyRootPwa.ROOT.TGraphErrors(len(reals), np.asarray(reals, dtype = np.float64), np.asarray(imags, dtype = np.float64), np.asarray(reErr, np.float64), np.asarray(imErr, dtype = np.float64))
+		argand = ROOT.TGraphErrors(len(reals), np.asarray(reals, dtype = np.float64), np.asarray(imags, dtype = np.float64), np.asarray(reErr, np.float64), np.asarray(imErr, dtype = np.float64))
 		if index > 0:
 			argand.SetLineColor(index + 1)
 		else:
 			setAxesRange(argand)
 #		print "========================================================"
-#		for i in range(len(reals)):
+#		for i in xrange(len(reals)):
 #			print index, i,'a',reals[i]**2 +imags[i]**2,reals[i],imags[i],phase(reals[i]+1.j*imags[i])
 #		print "========================================================"
 		return argand
@@ -365,7 +392,7 @@ class resultViewer:
 		reals = []
 		imags = []
 		comas = []
-		for i in range(self.binsY):
+		for i in xrange(self.binsY):
 			re  = self.realHists[index].GetBinContent(nBin + 1, i+1)
 			im  = self.imagHists[index].GetBinContent(nBin + 1, i+1)
 			if re == 0. and im == 0.:
@@ -399,7 +426,7 @@ class resultViewer:
 		if index > 0:
 			hist.SetLineColor(index + 1)
 #		print "========================================================"
-#		for i in range(hist.GetNbinsX()):
+#		for i in xrange(hist.GetNbinsX()):
 #			if not hist.GetBinContent(i+1) == 0.:
 #				print index,i,b, hist.GetBinContent(i+1)
 #		print "========================================================"
@@ -411,8 +438,8 @@ class resultViewer:
 		yMax = self.intensHists[0].GetYaxis().GetXmax()
 		xMin = self.intensHists[0].GetXaxis().GetBinLowEdge(nBin+1)
 		xMax = self.intensHists[0].GetXaxis().GetBinUpEdge( nBin+1)
-		minLine = pyRootPwa.ROOT.TLine(xMin, yMin, xMin, yMax)
-		maxLine = pyRootPwa.ROOT.TLine(xMax, yMin, xMax, yMax)
+		minLine = ROOT.TLine(xMin, yMin, xMin, yMax)
+		maxLine = ROOT.TLine(xMax, yMin, xMax, yMax)
 		minLine.SetLineWidth(3)
 		maxLine.SetLineWidth(3)
 		return maxLine, minLine
@@ -426,13 +453,13 @@ class resultViewer:
 		minLine.Draw()
 		self.intensCanvas.Update()
 
-		for i in range(5):
+		for i in xrange(5):
 			if self.showPlots[i] and not i == 1:
 				self.sliceCanvasses[i].cd()
 				self.sliceCanvasses[i].Clear()
 				slices = [self.getSlice(nBin, mode = self.sliceModes[i])]
 				slices[0].Draw()
-				for h in range(1, self.nHists):
+				for h in xrange(1, self.nHists):
 					slices.append(self.getSlice(nBin, h, mode = self.sliceModes[i]))
 					slices[-1].Draw("SAME")
 				self.sliceCanvasses[i].Update()
@@ -441,7 +468,7 @@ class resultViewer:
 				self.sliceCanvasses[i].Clear()
 				argands = [self.getArgand(nBin)]
 				argands[0].Draw()
-				for h in range(1, self.nHists):
+				for h in xrange(1, self.nHists):
 					argands.append(self.getArgand(nBin, h))
 					argands[-1].Draw("SAME")
 				self.sliceCanvasses[i].Update()
@@ -501,11 +528,11 @@ class resultViewer:
 			return
 		with open(name + ".intens", 'w') as out:
 			hist = self.getSlice(nBin, index)
-			for i in range(hist.GetNbinsX()):
+			for i in xrange(hist.GetNbinsX()):
 				out.write(str(hist.GetXaxis().GetBinLowEdge(i+1)) + ' ' + str(hist.GetXaxis().GetBinUpEdge(i+1)) + ' ' + str(hist.GetBinContent(i+1)) + ' ' + str(hist.GetBinError(i+1)) + '\n')
 		with open(name + ".argand", 'w') as out:
 			argand = self.getArgand(nBin, index)
-			for i in range(argand.GetN()):
+			for i in xrange(argand.GetN()):
 				X  = argand.GetX()[i]
 				Y  = argand.GetY()[i]
 				XE = argand.GetErrorX(i)
@@ -514,7 +541,7 @@ class resultViewer:
 #		print "Written."
 
 	def getLaTeXMassString(self, nBin):
-		if not self.overrideMassString == "":
+		if self.overrideMassString is not None:
 			return self.overrideMassString
 		mMin = self.intensHists[0].GetXaxis().GetBinLowEdge(nBin+1)
 		mMax = self.intensHists[0].GetXaxis().GetBinUpEdge( nBin+1)
@@ -572,7 +599,30 @@ class resultViewer:
 				plot.setZlim((0., self.intensHists[0].GetMaximum()))
 				plot.setXlabel(self.m3PiString)
 				plot.setYlabel(self.m2PiString)
+				if self.mark2DplotColor is not None:
+					xMin = self.intensHists[0].GetXaxis().GetBinLowEdge(nBin+1)
+					xMax = self.intensHists[0].GetXaxis().GetBinUpEdge(nBin+1)
+					yMin = self.intensHists[0].GetYaxis().GetBinLowEdge(1)
+					for i in xrange(self.intensHists[0].GetNbinsY()):
+						if not self.intensHists[0].GetBinContent(nBin+1, i+1) == 0.:
+							yMax = self.intensHists[0].GetYaxis().GetBinUpEdge(i+1)
+						else:
+							break
+					rectangle = matplotlib.patches.Rectangle((xMin,yMin), xMax-xMin, yMax-yMin, edgecolor = 'none', facecolor = self.mark2DplotColor)
+					plot.axes.add_patch(rectangle)
 				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes, size = self.titleFontSize)
+				if self.rightString is not None:
+					plot.axes.text(self.rightStringXpos,self.tStringYpos, self.rightString, transform = plot.axes.transAxes, size = self.titleFontSize, horizontalalignment='right')
+
+#				plot.axes.plot([1.8,1.8], [.278,1.66], color = "red", markersize = 0., linewidth = 4.15)
+
+#				plot.axes.annotate(r"$\rho(770)$", xy=(1.6, 0.77), xytext=(0.55, 0.77), color = "blue",
+#			            arrowprops=dict(edgecolor = "white", facecolor='blue', shrink=0.05), horizontalalignment = "left" ,verticalalignment='center',
+#			            )
+#				plot.axes.annotate(r"$\pi_1(1600)$", xy=(1.6, 0.77), xytext=(1.60, 1.8), color = "red",
+#			            arrowprops=dict(edgecolor = "white",facecolor='red', shrink=0.05), horizontalalignment = "center" ,verticalalignment='bottom' ,
+#			            )
+
 
 				plot.finishAndSaveAndClose(pdfOutput)
 				
@@ -621,11 +671,11 @@ class resultViewer:
 		else:
 			with modernplotting.toolkit.PdfWriter(slicePlotName) as pdfOutput:
 				plot = style.getPlot1D()
-				hists = [self.getSlice(nBin, index) for index in range(self.nHists)]
+				hists = [self.getSlice(nBin, index) for index in xrange(self.nHists)]
 				
 				nnBins = hists[0].GetNbinsX()
 				firstUpperBinBorder = -1.
-				for i in range(nnBins):
+				for i in xrange(nnBins):
 					if not hists[0].GetBinContent(nnBins-i) == 0.:
 						firstUpperBinBorder = hists[0].GetXaxis().GetBinUpEdge(nnBins-i)
 						break
@@ -641,21 +691,51 @@ class resultViewer:
 					hist = parseTH1D(fn, self.scaleFakk, addX = self.addiXoffset)
 					modernplotting.root.plotTH1D(hist, plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':0, 'color':self.addiColor})
 				plot.setXlabel(self.m2PiString)
-#				plot.setXlim(self.mMin,self.mMax)
-				plot.setXlim(self.mMin,firstUpperBinBorder)
+				if self.xLims is not None:
+					plot.setXlim(self.xLims[0],self.xLims[1])
+				else:
+					plot.setXlim(self.mMin,firstUpperBinBorder)
 				plot.setYlabel(self.intensLabel)
 				plot.axes.yaxis.offsetText.set_position((-.15,1.))
 				if self.scaleTo == "corr":
-					plot.setYlim(0.,hists[0].GetMaximum()*self.topMarginIntens)
+					yLim = hists[0].GetMaximum()*self.topMarginIntens
 				elif self.scaleTo == "maxCorrData":
-					plot.setYlim(0.,max(hists[0].GetMaximum(),hists[1].GetMaximum())*self.topMarginIntens)
+					yLim = max(hists[0].GetMaximum(),hists[1].GetMaximum())*self.topMarginIntens
 				else:
 					raise RuntimeError("Unknwons scale option '" + self.scaleTo + "'")
-				
+				if nBin in self.intensLims:
+					yLim = self.intensLims[nBin][0]
+
+				if self.checkIntensRanges:
+					while True:
+						inp = raw_input("enter yLim for m_"+ str(nBin) + " (now = " + str(yLim) + ")>>>")
+						try:
+							if inp == '':
+								print "Use old yLim!!!"
+								break
+							yLim = float(inp)
+							with open("storeScales",'a') as outFile:
+								outFile.write(str(nBin)+ ' ' + str(yLim) + '\n')
+							break
+						except:
+							pass
+						
+				plot.setYlim(0.,yLim)
+				if self.InMax is None:
+					self.InMax = yLim
+				else:
+					self.InMax = max(self.InMax, yLim)
+
 				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes, size = self.titleFontSize)
+				if self.rightString is not None:
+					plot.axes.text(self.rightStringXpos,self.tStringYpos, self.rightString, transform = plot.axes.transAxes, size = self.titleFontSize, horizontalalignment='right')
 
 				if self.makeLegend:
-					plot.fig.legend(handlers, legends, fontsize = "x-small",loc =0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=style.p1dAxisPos)	
+					plot.fig.legend(handlers, legends, fontsize = "x-small",loc =0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=style.p1dAxisPos, fancybox = False, framealpha=0.)	
+
+				if self.intYaxisXpos is not None:
+					plot.axes.yaxis.set_label_coords(self.intYaxisXpos, 0.5)
+
 
 				plot.finishAndSaveAndClose(pdfOutput)
 		if stdCmd is not None:
@@ -686,12 +766,24 @@ class resultViewer:
 			with modernplotting.toolkit.PdfWriter(argandPlotName) as pdfOutput:
 				plot = style.getPlot1D()
 				if self.noEllipse or not self.reImCorrel:
-					argands   = [self.getArgand(nBin, index) for index in range(self.nHists)]
+					argands   = [self.getArgand(nBin, index) for index in xrange(self.nHists)]
 					addGraphs = []
 					for fn in addFiles:
 						graph = parseTGraph(fn, self.scaleFacc**.5)
 						addGraphs.append(graph)
 						modernplotting.root.plotTH1D(graph,plot,yErrors=True,xErrors=True,maskValue=0.,markerDefinitions={'linestyle':'solid','linewidth':.2,'zorder':0,'color':self.addiColor})
+						for pair in self.connectAddGraphs:
+							if not p[0] < len(addGraphs) or not p[1] < len(addGraphs):
+								print "ERROR: Not enough graphs to connect", pair, len(addGraphs)
+							N = min(addGraphs[p[0]].GetN(), addGraphs[p[1]].GetN())
+							x1 = addGraphs[p[0]].GetX()
+							x2 = addGraphs[p[0]].GetX()
+							y1 = addGraphs[p[0]].GetY()
+							y3 = addGraphs[p[0]].GetY()
+							for i in xrange(N):
+								print "Connect",i,"of",pair
+								plot.plot([x1[i], x2[i]],[y1[i],y2[i]], markersize = 0., color = self.addiColor, linewidth = 0.2)
+
 					if self.plotData:
 						modernplotting.root.plotTH1D(argands[1],plot,yErrors=True,xErrors=True,maskValue=0.,markerDefinitions={'linestyle':'solid','linewidth':.2,'zorder':2,'color':self.dataColor})
 					if len(argands) > 2 and self.plotTheo:
@@ -707,9 +799,27 @@ class resultViewer:
 						if not self.XcheckArgand:
 							plot.plot(X,Y,**{'linestyle':'solid','linewidth':.7,'zorder':2,'color':self.addiColor})
 						else:
-							plot.plot(X,Y,**{'linestyle':'solid','linewidth':.0,'zorder':5,'color':'red','markersize':2.,'markeredgecolor':'none'}) # here here ololo
+							plot.plot(X,Y,**{'linestyle':'solid','linewidth':.0,'zorder':5,'color':self.addiColor,'markersize':2.,'markeredgecolor':'none'}) # here here ololo
+					for pair in self.connectAddGraphs:
+						if not pair[0] < len(addFiles) or not pair[1] < len(addFiles):
+							print "ERROR: Not enough graphs to connect", pair, len(addFiles)
+						x1,ex1,y1,ey1 = parseArgand(addFiles[pair[0]], skipZero = True, fakk = self.scaleFakk**.5)
+						x2,ex2,y2,ey2 = parseArgand(addFiles[pair[1]], skipZero = True, fakk = self.scaleFakk**.5)
+						N = min(len(x1),len(x2),len(y1),len(y2))
+						for i in xrange(N):
+							print "Connect",i,"of",pair
+							plot.plot([x1[i], x2[i]],[y1[i],y2[i]], markersize = 0., color = self.addiColor, linewidth = 0.2)
+
 					if self.plotData:
 						X,Y,COMA = self.getArgandData(nBin, 1, getCOMA = False)
+						if len(self.connectCorrPoints) > 0:
+							XD, YD, CD = self.getArgandData(nBin, 0, getCOMA = True)
+							for p in self.connectCorrPoints:
+								if len(X) <= p:
+									print "WARNING: Connect point",p,"not possible. Index out of range"
+									continue
+								plot.plot([X[p],XD[p]],[Y[p],YD[p]], markersize = 0., color = modernplotting.colors.colorScheme.gray, linewidth = 0.1 )
+
 #						print "data"
 #						print X
 #						print Y
@@ -718,21 +828,30 @@ class resultViewer:
 					if self.nHists > 2 and self.plotTheo:
 						X,Y,COMA = self.getArgandData(nBin,2,getCOMA=False)
 						plot.plot(X, Y, **{'marker':None,'markersize':0.,'linestyle':'solid','linewidth':1.,'zorder':2,'color':self.theoColor})
-						if len(self.connectPoints) > 0:
+						if len(self.connectTheoPoints) > 0:
 							XD, YD, CD = self.getArgandData(nBin, 0, getCOMA = True)
-							for p in self.connectPoints:
+							for p in self.connectTheoPoints:
 								if len(X) <= p:
 									print "WARNING: Connect point",p,"not possible. Index out of range"
 									continue
-								plot.plot([X[p],XD[p]],[Y[p],YD[p]], markersize = 0., color = 'k', linewidth = 0.1 )
+								plot.plot([X[p],XD[p]],[Y[p],YD[p]], markersize = 0., color = modernplotting.colors.colorScheme.gray, linewidth = 0.1 )
+						for pt in self.arrowsToTheo:
+							XD, YD, CD = self.getArgandData(nBin, 2, getCOMA = False)
+							plot.plot([0.,XD[pt]], [0.,YD[pt]], **{'marker':None,'markersize':0.,'linestyle':'solid','linewidth':1.,'zorder':2,'color':self.theoColor})
+							plot.plot([XD[pt]],[YD[pt]], **{'color':'orange', 'zorder':2})
+#							plot.axes.arrow(0.,0., XD[pt],YD[pt], color = self.theoColor, linewidth = 1, linestyle = 'solid', arrowstyle = "->")
+
 					if self.plotCorr:
 						X,Y,COMA = self.getArgandData(nBin, 0, getCOMA = True)
 #						with open("coma_from_the_rv_C.dat",'w') as outFile:
-#							for i in range(len(X)):
+#							for i in xrange(len(X)):
 #								outFile.write(str(COMA[i][0][0])+' '+str(COMA[i][0][1])+' '+str(COMA[i][1][1])+'\n')
-
 						modernplotting.specialPlots.plotErrorEllipses(plot,X,Y,COMA,markerDefinitions={'linestyle':'solid','linewidth':1.,'zorder':1,'color':self.corrColor,'markersize':0.})
 						plot.plot(X,Y, **{'linestyle' : 'solid', 'linewidth' : 1., 'zorder' : 4, 'color' : self.corrColor})
+						if self.markRange is not None:
+							markX = X[self.markRange[0]:self.markRange[1]]
+							markY = Y[self.markRange[0]:self.markRange[1]]
+							plot.plot(markX,markY, markersize = 0., color = self.corrColor, linewidth = 2.)
 						for i in pointLabels:
 							if i < len(X):
 								x = X[i]
@@ -751,12 +870,14 @@ class resultViewer:
 					raise RuntimeError("Unknwons scale option '" + self.scaleTo + "'")
 
 				if self.makeLegend:
-					plot.fig.legend(handlers, legends, fontsize = "x-small",loc = 0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=style.p1dAxisPos)	
+					plot.fig.legend(handlers, legends, fontsize = "x-small",loc = 0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=style.p1dAxisPos, fancybox = False, framealpha=0.)	
 				plot.setXlabel(self.realLabel)
 				plot.setYlabel(self.imagLabel)
 				plot.axes.yaxis.offsetText.set_position((-.15,1.))
 				plot.axes.xaxis.offsetText.set_position((1.05,0.))
 				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes,size = self.titleFontSize)
+				if self.rightString is not None:
+					plot.axes.text(self.rightStringXpos,self.tStringYpos, self.rightString, transform = plot.axes.transAxes, size = self.titleFontSize, horizontalalignment='right')
 				fakk   = .1
 				yRange = (ranges[1][0], ranges[1][1] +  fakk*(ranges[1][1] - ranges[1][0]))
 
@@ -765,14 +886,73 @@ class resultViewer:
 
 				if self.yticks:
 					plot.axes.yaxis.set_ticks(self.yticks)
-
-
-				plot.setXlim(ranges[0])
+				
 				yRange = (yRange[0] + self.yAxisShift,yRange[1] + self.yAxisShift)
-				plot.setYlim(yRange)
 
-				plot.plot([ranges[0][0],ranges[0][1]],[0.,0.], **self.lineArgs)
-				plot.plot([0.,0.],[yRange[0],yRange[0] + (yRange[1]-yRange[0])*self.scaleArgandZeroLine],**self.lineArgs)
+				xMin = ranges[0][0]
+				xMax = ranges[0][1]
+				yMin = yRange[0]
+				yMax = yRange[1]
+				if nBin in self.argandLims:
+					xMin = self.argandLims[nBin][0]
+					xMax = self.argandLims[nBin][1]
+					yMin = self.argandLims[nBin][2]
+					yMax = self.argandLims[nBin][3]
+
+				if self.checkArgandRanges:
+					inp = raw_input("adjust m_"+str(nBin)+"?")
+					if not inp == "":
+						while True:
+							inp = raw_input("enter 'xMin xMax yMin yMax' for m_"+ str(nBin) + " (now = " + str(xMin) + ' ' + str(xMax) + ' ' + str(yMin) + ' ' + str(yMax) + ")>>>")
+							try:
+								chunks = inp.split()
+								if not len(chunks) == 4:
+									print "need four input values"
+									raise Exception
+								if not chunks[0] == '=':
+									xMin = float(chunks[0])
+								if not chunks[1] == '=':
+									xMax = float(chunks[1])
+								if not chunks[2] == '=':
+									yMin = float(chunks[2])
+								if not chunks[3] == '=':
+									yMax = float(chunks[3])
+
+								with open("storeScales",'a') as outFile:
+									outFile.write(str(nBin)+ ' ' + str(xMin)+ ' ' + str(xMax)+ ' ' + str(yMin)+ ' ' + str(yMax) + '\n')
+								break
+							except:
+								pass
+				rangeX   = xMax - xMin
+				rangeY   = yMax - yMin
+				delRange = rangeX - rangeY
+				if delRange > 0:
+					yMin -= delRange/2
+					yMax += delRange/2
+				else:
+					xMin += delRange/2
+					xMax -= delRange/2
+				print "Check me please",xMax-xMin, yMax-yMin
+
+				plot.setXlim(xMin, xMax)
+				plot.setYlim(yMin, yMax)
+
+				if self.reMax is None:
+					self.reMax = xMax
+					self.reMin = xMin
+					self.imMax = yMax
+					self.imMin = yMin
+				else:
+					self.reMax = max(xMax,self.reMax)
+					self.reMin = min(xMin,self.reMin)
+					self.imMax = max(yMax,self.imMax)
+					self.imMin = min(yMin,self.imMin)
+
+				plot.plot([xMin,xMax],[0.,0.], **self.lineArgs)
+				plot.plot([0.,0.],[yMin,yMax + (yRange[1]-yRange[0])*self.scaleArgandZeroLine],**self.lineArgs)
+
+				if self.argYaxisXpos is not None:
+					plot.axes.yaxis.set_label_coords(self.argYaxisXpos, 0.5)
 
 				plot.finishAndSaveAndClose(pdfOutput)
 		print "Finished with creating .pdf-files"
@@ -825,10 +1005,10 @@ class resultViewer:
 		for mode in [(REAL,'real'),(IMAG,'imag')]:
 			with modernplotting.toolkit.PdfWriter(outFileNameBase.replace("<ri>",mode[1])) as pdfOutput:
 				plot = style.getPlot1D()
-				hists = [self.getSlice(nBin, index, mode = mode[0]) for index in range(self.nHists)]
+				hists = [self.getSlice(nBin, index, mode = mode[0]) for index in xrange(self.nHists)]
 				nnBins = hists[0].GetNbinsX()
 				firstUpperBinBorder = -1.
-				for i in range(nnBins):
+				for i in xrange(nnBins):
 					if not hists[0].GetBinContent(nnBins-i) == 0.:
 						firstUpperBinBorder = hists[0].GetXaxis().GetBinUpEdge(nnBins-i)
 						break
@@ -844,8 +1024,10 @@ class resultViewer:
 				if self.plotCorr:
 					modernplotting.root.plotTH1D(hists[0], plot, yErrors = True, maskValue = 0., markerDefinitions = { 'zorder':3, 'color':self.corrColor})
 				plot.setXlabel(self.m2PiString)
-#				plot.setXlim(self.mMin,self.mMax)
-				plot.setXlim(self.mMin,firstUpperBinBorder)
+				if self.xLims is not None:
+					plot.setXlim(self.xLims[0],self.xLims[1])
+				else:
+					plot.setXlim(self.mMin,firstUpperBinBorder)
 				if mode[0] == REAL:
 					plot.setYlabel(self.realLabel)
 				elif mode[0] == IMAG:
@@ -866,6 +1048,8 @@ class resultViewer:
 					raise RuntimeError("Unknwons scale option '" + self.scaleTo + "'")
 			
 				plot.axes.text(self.tStringXpos,self.tStringYpos, self.tString, transform = plot.axes.transAxes,size = self.titleFontSize)
+				if self.rightString is not None:
+					plot.axes.text(self.rightStringXpos,self.tStringYpos, self.rightString, transform = plot.axes.transAxes, size = self.titleFontSize, horizontalalignment='right')
 
 				if self.makeLegend:
 					plot.fig.legend(handlers, legends, fontsize = "x-small",loc =0 , mode = "expand", ncol = 2, borderaxespad=0., bbox_to_anchor=style.p1dAxisPos)	

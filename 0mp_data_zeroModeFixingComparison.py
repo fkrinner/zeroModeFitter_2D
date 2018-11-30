@@ -189,16 +189,16 @@ def main():
 		studyAdder = ""
 	print "Study: "+study
 
-	referenceWave = ""
+	referenceWave    = ""
 
-	inFileName    = fileNameMap[study]
+	inFileName       = fileNameMap[study]
 	tBins            = [tBin]
 
 	startBin         = 11
 	stopBin          = 50
 
-#	startBin     = 25
-#	stopBin      = 50
+#	startBin         = 32
+#	stopBin          = 33
 
 	allMethods       = {}
 	methodStrings    = {}
@@ -217,7 +217,7 @@ def main():
 
 	print "Start with fixed shape f0"
 	fixedShapeF0 = doFixedShapes(inFileName, sectors[:1], startBin, stopBin, tBins, referenceWave = referenceWave)
-	allMethods["fixedShapeF0"] = fixedShapeF0
+#	allMethods["fixedShapeF0"] = fixedShapeF0
 	print "Finished with fixed shape f0"
 
 #	print "Start with fixed shape rho"
@@ -248,7 +248,7 @@ def main():
 
 	print "Start with fitting rho"
 	fitRho = doFitRho(inFileName, sectors, startBin, stopBin, tBins, sectorRangeMap = sectorRangeMap, referenceWave = referenceWave, writeResultToFile = "rhoMassesAndWidths_0-+0+1--_global.dat")
-	allMethods["fitRho"] = fitRho
+#	allMethods["fitRho"] = fitRho
 	print "Finished with fitting rho"
 
 #	print "Start with fitting restricted rho (1 Gamma)"
@@ -307,56 +307,56 @@ def main():
 	hist = pyRootPwa.ROOT.TH2D("hist","hist", len(params)+2, 0, len(params)+2, len(params), 0, len(params))
 
 	cumulWeights = {}
-	resolvedWeightedSum = [[]] # Assumes one t' bin
-	for i in range(stopBin - startBin):
-		dim = len(params[m][0][i])
-		prrs = [0.] * dim
-		for m in params:
-			weight = comps[m][0][i]
-			if not m in cumulWeights:
-				cumulWeights[m] = 0.
-			cumulWeights[m] += weight
-			for j in range(dim):
-#				print dim,i,j,params[m][0]
-#				print prrs
-				if weight < 0.:
-					raise ValueError("Smaller than zero weight encountered...")
-				prrs[j] += weight * params[m][0][i][j]
-		resolvedWeightedSum[0].append(prrs)
-
-	evals = {}
-	for i,m in enumerate(studyList):
-#		print "-------------------------------"
-		for j,n in enumerate(studyList):
-			evl = sumUp(allMethods[n].evaluateResolvedZeroModeParametersForMode(params[m])).real
-			evals[n,m] = evl
-			diff = (evl-selfEvals[n])/selfEvals[n]
-
-#			allMethods["fixedShapes"].removeZeroModeFromComa()
-#			print "------------------------------------IN---------------------------------"
-#			print params[m], params[n]
-#			diff = sumUp(allMethods["fixedShapes"].compareTwoZeroModeCorrections(params[m], params[n]))
-#			print diff
-#			print "------------------------------------OUT---------------------------------"
-#			print m,'in',n,":",diff
-			hist.SetBinContent(i+1, j+1, diff)
-#	return 
-	weightedSum = weightedParametersSum(evals, selfEvals, params)
-	for i,m in enumerate(studyList):
-		evl = sumUp(allMethods[m].evaluateZeroModeParametersForMode(cloneZeros(weightedSum))).real
-		diff = (evl - selfEvals[m])/selfEvals[m]
-		evl2 = sumUp(allMethods[m].evaluateZeroModeParametersForMode(resolvedWeightedSum)).real
-		diff2 = (evl2 - selfEvals[m])/selfEvals[m]
-
-		print m,diff,";:;:;;>>>??"
-		hist.SetBinContent(len(studyList)+1, i+1, diff)
-		hist.SetBinContent(len(studyList)+2, i+1, diff2)
-
-
-
-	axolotl = []
-	for i,study in enumerate(studyList):
-		axolotl.append(shortlabels[study])
+#	resolvedWeightedSum = [[]] # Assumes one t' bin
+#	for i in range(stopBin - startBin):
+#		dim = len(params[m][0][i])
+#		prrs = [0.] * dim
+#		for m in params:
+#			weight = comps[m][0][i]
+#			if not m in cumulWeights:
+#				cumulWeights[m] = 0.
+#			cumulWeights[m] += weight
+#			for j in range(dim):
+##				print dim,i,j,params[m][0]
+##				print prrs
+#				if weight < 0.:
+#					raise ValueError("Smaller than zero weight encountered...")
+#				prrs[j] += weight * params[m][0][i][j]
+#		resolvedWeightedSum[0].append(prrs)
+#
+#	evals = {}
+#	for i,m in enumerate(studyList):
+##		print "-------------------------------"
+#		for j,n in enumerate(studyList):
+#			evl = sumUp(allMethods[n].evaluateResolvedZeroModeParametersForMode(params[m])).real
+#			evals[n,m] = evl
+#			diff = (evl-selfEvals[n])/selfEvals[n]
+#
+##			allMethods["fixedShapes"].removeZeroModeFromComa()
+##			print "------------------------------------IN---------------------------------"
+##			print params[m], params[n]
+##			diff = sumUp(allMethods["fixedShapes"].compareTwoZeroModeCorrections(params[m], params[n]))
+##			print diff
+##			print "------------------------------------OUT---------------------------------"
+##			print m,'in',n,":",diff
+#			hist.SetBinContent(i+1, j+1, diff)
+##	return 
+#	weightedSum = weightedParametersSum(evals, selfEvals, params)
+#	for i,m in enumerate(studyList):
+#		evl = sumUp(allMethods[m].evaluateZeroModeParametersForMode(cloneZeros(weightedSum))).real
+#		diff = (evl - selfEvals[m])/selfEvals[m]
+#		evl2 = sumUp(allMethods[m].evaluateZeroModeParametersForMode(resolvedWeightedSum)).real
+#		diff2 = (evl2 - selfEvals[m])/selfEvals[m]
+#
+#		print m,diff,";:;:;;>>>??"
+#		hist.SetBinContent(len(studyList)+1, i+1, diff)
+#		hist.SetBinContent(len(studyList)+2, i+1, diff2)
+#
+#
+#
+#	axolotl = []
+#	for i,study in enumerate(studyList):
+#		axolotl.append(shortlabels[study])
 #		axolotl.append(alphabet[i])
 
 	style.titleRight = r"$0^{-+}0^+$"
@@ -377,14 +377,14 @@ def main():
 #		pdfOutput.savefigAndClose()
 
 
-	with open("studies_0mp_data"+str(tBin)+studyAdder+".txt",'w') as out:
-		for axl in axolotl:
-			out.write(axl + ' ')
-		out.write("\n")
-		for i in range(hist.GetNbinsX()):
-			for j in range(hist.GetNbinsY()):
-				out.write(str(hist.GetBinContent(i+1, j+1)) + ' ')
-			out.write('\n')
+#	with open("studies_0mp_data"+str(tBin)+studyAdder+".txt",'w') as out:
+#		for axl in axolotl:
+#			out.write(axl + ' ')
+#		out.write("\n")
+#		for i in range(hist.GetNbinsX()):
+#			for j in range(hist.GetNbinsY()):
+#				out.write(str(hist.GetBinContent(i+1, j+1)) + ' ')
+#			out.write('\n')
 
 ##### Writing starts here
 	doF0fitGlobal = False
@@ -540,6 +540,8 @@ def main():
 				rv.writeAmplFiles(bin, fileName = fileName)
 
 
+	resolvedWeightedSum = fixedShapes.getZeroModeParametersForMode()
+
 	totalHists = fixedShapes.getTotalHists(resolvedWeightedSum)
 #	studyAdder = "_noCorr"
 
@@ -548,14 +550,22 @@ def main():
 			for m in t:
 				m.Write()
 #	return
-	folder = "./comparisonResultsData"+studyAdder+"/"
+#	folder = "./comparisonResultsData"+studyAdder+"/"
+	folder = "./"
 	for s, sect in enumerate(allMethods['fixedShapes'].sectors):
+
 #		allMethods['fixedShapes'].removeZeroModeFromComa()
 #		allMethods['fixedShapes'].removeGlobalPhaseFromComa()
 		rv = allMethods['fixedShapes'].produceResultViewer(resolvedWeightedSum,s, noRun = True, plotTheory = True)
+#		rv.titleFontSize = 11
+		rv.showColorBar  = True
+		rv.writeToRootFile("0mp_"+sect+".root")
 
 		rv.writeBinToPdf(startBin, stdCmd = [folder + sect + "_data_2D_"+str(tBin)+".pdf", "", [], "", []])
 		rv.plotData = True
+		rv.plotTheo = False
+
+		continue
 		for b in range(startBin, stopBin):
 #			if  not b == 32:
 #				continue 
@@ -565,9 +575,9 @@ def main():
 			intensNames = []
 			argandNames = []
 
-			rv.writeAmplFiles(b,0,"./filesForMisha/"+sect+"_m"+str(b)+"_t"+str(tBin)+"_corrected")
-			rv.writeAmplFiles(b,1,"./filesForMisha/"+sect+"_m"+str(b)+"_t"+str(tBin)+"_uncorrect")
-			continue
+#			rv.writeAmplFiles(b,0,"./filesForMisha/"+sect+"_m"+str(b)+"_t"+str(tBin)+"_corrected")
+#			rv.writeAmplFiles(b,1,"./filesForMisha/"+sect+"_m"+str(b)+"_t"+str(tBin)+"_uncorrect")
+#			continue
 
 			rv.writeBinToPdf(b, stdCmd = ["", folder + sect + "_data_intens_"+str(b)+"_"+str(tBin)+".pdf", intensNames,  folder + sect + "_data_argand_"+str(b)+"_"+str(tBin)+".pdf", argandNames])
 	print studyList

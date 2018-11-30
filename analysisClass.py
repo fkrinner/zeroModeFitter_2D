@@ -70,15 +70,19 @@ class amplitudeAnalysis:
 		exec command
 		self.explicit_MINUIT_function = types.MethodType(explicit_MINUIT_function, self)
 
-	def fitShapeParametersForBinRange(self, startPars, tBinsToEvaluate, mBinsToEvaluate, zeroModeParameters = [], method = "BFGS"):
-		if len(zeroModeParameters) > 0:
+	def fitShapeParametersForBinRange(self, startPars, tBinsToEvaluate, mBinsToEvaluate, zeroModeParameters = None, method = "BFGS"):
+		if zeroModeParameters is not None:
 			self.setZeroModeParameters(zeroModeParameters)
 		self.model.setBinsToEvalueate(tBinsToEvaluate,mBinsToEvaluate)
 		pars    = startPars[:]
 		results = {}
 #		methods = ["Nelder-Mead","Powell","CG","BFGS","Newton-CG","L-BFGS-B","TNC","COBYLA","SLSQP","dogleg","trust-ncg","trust-exact","trust-krylov"]
 		start   = datetime.now()
-		self.MINUIT_function = self.model.fixedZMPchi2
+		if zeroModeParameters is not None:
+			self.MINUIT_function = self.model.fixedZMPchi2
+		else:
+			print "Setting chi2 as MINUIT"
+			self.MINUIT_function = self.model.chi2
 		cmd="m = Minuit(self.explicit_MINUIT_function,"+self.startValueString+")"
 		exec cmd
 		print "Starting migrad"
@@ -530,11 +534,11 @@ class amplitudeAnalysis:
 		self.fitParameters = shapePars[:]
 		if not self.model[0].setParametersAndErrors(shapePars, errs):
 			raise RuntimeError("Could not setParametersAndErrors()")
-		if not zeroModeParameters:
+		self.SET('hasFitResult')
+		if zeroModeParameters is None:
 			self.calculateNonShapeParameters()
 		else:
 			self.calculateNonShapeParametersForZeroModeParameters(zeroModeParameters)
-		self.SET('hasFitResult')
 
 	def calculateNonShapeParameters(self):
 		"""

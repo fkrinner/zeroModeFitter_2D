@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # pnGize.py
 import os, sys
 

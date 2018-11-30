@@ -8,7 +8,7 @@ from fixedparameterizationPaths import getFileNameForSector
 from modes import PHASE, AMPL, SMOOTH, NONE
 from utils import sumUp, weightedSum, cloneZeros, checkLaTeX
 import sys
-import pyRootPwa
+import ROOT
 import numpy as np
 from globalDefinitions import referenceWave, mPi, mK,mRho,Grho,mRhoPrime,GrhoPrime,mF0,g1,g2,mF2,GF2,Pr0,m1500,G1500, mF2prime, GF2prime
 from rootfabi import root_open
@@ -377,11 +377,11 @@ def main():
 		sectorRangeMap["2-+0+[pi,pi]2++PiS"] = (0., f2Range)
 		f2RangeString = "_range"+str(f2Range)
 
-#	startBin         = 11
-#	stopBin          = 50
-
-	startBin         = 40
+	startBin         = 11
 	stopBin          = 50
+
+#	startBin         = 40
+#	stopBin          = 50
 
 	ifn              = None
 	for a in sys.argv:
@@ -417,11 +417,13 @@ def main():
 
 #       # - - - - --- Start here with the model builting --- - - - - #       #
 
-	nPol       = 3
+	nPol = 3
+	nCmx = 0
 	for a in sys.argv:
 		if a.startswith("nPol"):
 			nPol = int(a[4:])
-
+		if a.startswith("nCmx"):
+			nCmx = int(a[4:])
 	f2Re0     = mF2**2
 	f2Im0     = mF2*GF2
 
@@ -458,10 +460,14 @@ def main():
 	
 	params     = [poleReal,poleImag,pPoleReal,pPoleImag,ppPoleReal,ppPoleImag]
 	params     = params[:2*nPol]
+	for i in range(nCmx):
+		params.append(ptc.parameter(2.,"comPolRe_"+str(i)))
+		params.append(ptc.parameter(0.,"comPolIm_"+str(i)))
+		params.append(ptc.parameter(1.,"comPolG_"+str(i)))
 
 	for d in range(polyDeg_po):
 		params.append(ptc.parameter(2*random()-1., "c_"+str(d)))
-	Kmatrix    = ptc.simpleOneChannelKmatrix(params, nPol, polyDeg_po, 4*mPi**2)
+	Kmatrix    = ptc.simpleOneChannelKmatrix(params, nPol, polyDeg_po, 4*mPi**2,nComplex = nCmx)
 	useCM      = False
 	for a in sys.argv:
 		if a == "CM":
@@ -526,15 +532,18 @@ def main():
 		nps = ""
 	else:
 		nps = "nPol"+str(nPol)+"_"
+	if nCmx > 0:
+		print "Using complex pole"
+		nps += "nCmx"+str(nCmx)+"_"
 
-	resultFile  =  "./KmatrixRestrictedZMfixing_allFourSectorsActive/2mpF2_Kmatrix_"+rrs+nps+ps+"_kPol"+str(polyDeg_po-1)+"_pPol"+str(pPolyDeg3)+"-"+str(pPolyDeg2)+"_t"+str(tBin)+"_m"+str(startBin)+'-'+str(stopBin)+'_'+str(seedint)+".dat"
+	resultFile  =  "./complexF2poles/2mpF2_Kmatrix_"+rrs+nps+ps+"_kPol"+str(polyDeg_po-1)+"_pPol"+str(pPolyDeg3)+"-"+str(pPolyDeg2)+"_t"+str(tBin)+"_m"+str(startBin)+'-'+str(stopBin)+'_'+str(seedint)+".dat"
 	fitter      = doFunctionFit(inFileName, model, startBin, stopBin, tBins, sectorRangeMap, referenceWave = referenceWave, acv = acv, zeroModeParameters = zeroModeParameters, writeResultToFile = resultFile, ifn = ifn)
 
 #       # - - - - --- Start the evaluations here --- - - - - #       #
 	nBinsPlot = 1000
 	def fPlot(v):
 		return v.imag
-#	hist = pyRootPwa.ROOT.TH2D("hhh","hhh", nBinsPlot, -.25, 6.25,nBinsPlot, -1., 1.)
+#	hist = ROOT.TH2D("hhh","hhh", nBinsPlot, -.25, 6.25,nBinsPlot, -1., 1.)
 #	for iX in range(nBinsPlot):
 #		x = hist.GetXaxis().GetBinCenter(iX+1)
 #		for iY in range(nBinsPlot):
@@ -553,88 +562,88 @@ def main():
 #			val = Kmatrix.complexCall(s)
 #			hist.SetBinContent(iX+1, iY+1, fPlot(val))
 #	hist.Draw("COLZ")
-	res = scipy.optimize.minimize(Kmatrix.absInverse,[f2Re0,f2Im0])
-	print res.x,"pole position"
-	mfv = res.fun
-	resSting = str(res.fun)+ " function value should be zero"
-	print resSting
-	BWstring = "BW par: "+str(abs(res.x[0])**.5)+" "+str(abs(res.x[1])/abs(res.x[0])**.5)+" (all absolute values)"
-	print BWstring
+#	res = scipy.optimize.minimize(Kmatrix.absInverse,[f2Re0,f2Im0])
+#	print res.x,"pole position"
+#	mfv = res.fun
+#	resSting = str(res.fun)+ " function value should be zero"
+#	print resSting
+#	BWstring = "BW par: "+str(abs(res.x[0])**.5)+" "+str(abs(res.x[1])/abs(res.x[0])**.5)+" (all absolute values)"
+#	print BWstring
 
-	if ifn is None:
-		print "= = = = = = = = = Starting BW error ersimation = = = = = = = = = "
-		nPoints     = 1000
-		poleMean    = res.x
-		poleSamples = []
-		i           = 0
-		failCount   = 0
-		while i < nPoints:
-			pts = np.random.multivariate_normal(fitter.fitParameters, fitter.MINUITcoma)
-			fitter.MINUIT_function(pts) # Call the function once to set parameters inside
-	#		fitter.model[0].setParametersAndErrors(pts, fitter.MINUITerrs)
-			res = scipy.optimize.minimize(Kmatrix.absInverse,poleMean)
-			if abs(res.fun) > 100*mfv:
-				print "No more pole found (mfv = "+str(mfv)+") : fval = "+str(res.fun)
-				failCount += 1
-				if failCount > nPoints:
-					print "Failed to find poles too often.... abort"
-					return
-				continue
-	#			raise ValueError("No more pole found: fval = "+str(res.fun))
-
-			poleSamples.append(res.x)
-			i+=1
-	#		print i,"Marker to find the PRINT 57473M3N7"
-		meanPole = [0.,0.]
-		for p in poleSamples:
-			meanPole[0] += p[0]
-			meanPole[1] += p[1]
-		meanPole[0] /= len(poleSamples)
-		meanPole[1] /= len(poleSamples)
-		poleComa = [[0.,0.],[0.,0.]]
-		for p in poleSamples:
-			poleComa[0][0] += (p[0]-meanPole[0])**2
-			poleComa[0][1] += (p[0]-meanPole[0])*(p[1]-meanPole[1])
-			poleComa[1][0] += (p[1]-meanPole[1])*(p[0]-meanPole[0])
-			poleComa[1][1] += (p[1]-meanPole[1])**2
-		poleComa[0][0] /= len(poleSamples)-1
-		poleComa[0][1] /= len(poleSamples)-1
-		poleComa[1][0] /= len(poleSamples)-1
-		poleComa[1][1] /= len(poleSamples)-1
-		comaString      = str(poleComa)
-		print " - - - - - - le compaire pramaitre  - - - - - - "
-		print meanPole, poleMean
-		print " - - - - - - le compaire pramaitre  - - - - - - "
-		print poleComa
-		print "= = = = = = = = = Finished BW error ersimation = = = = = = = = = "
-		mF2P = 1.9
-		GF2P =  .277
-		res  = scipy.optimize.minimize(Kmatrix.absInverse,[mF2P**2,mF2P*GF2P])
-		print res.x,"pole position"
-		resSting = str(res.fun)+ " function value should be zero"
-		print resSting
-		BWstring = "BW' par: "+str(abs(res.x[0])**.5)+" "+str(abs(res.x[1])/abs(res.x[0])**.5)+" (all absolute values)"
-		print BWstring
-		with open(resultFile,'a') as outFile:
-			outFile.write('\n'+BWstring+" "+resSting+"\ncoma "+comaString)
-	#		outFile.write('\n'+BWfitString)
-	#       # - - - - --- Start the evaluations here --- - - - - #       #
-		doPlots = False
-		for a in sys.argv:
-			if a == "plot":
-				doPlots = True
-	if ifn is not None:
-		doPlots = True # Set plots by default, if an inFile is given
-
-	if doPlots:
-		RV = fitter.produceResultViewer(zeroModeParameters,"2-+0+[pi,pi]2++PiS", noRun = True, plotTheory = True)
-		RV.plotData = True
-		for b in range(startBin, stopBin):
-			plotNameBase = "./Kmatrix_plots/2mp0p2ppPiS_<mode>_"+str(b)+"_"+str(tBin)+"_"+str(seedint)+".pdf"
-			RV.writeBinToPdf(b, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
+#	if ifn is None:
+#		print "= = = = = = = = = Starting BW error ersimation = = = = = = = = = "
+#		nPoints     = 1000
+#		poleMean    = res.x
+#		poleSamples = []
+#		i           = 0
+#		failCount   = 0
+#		while i < nPoints:
+#			pts = np.random.multivariate_normal(fitter.fitParameters, fitter.MINUITcoma)
+#			fitter.MINUIT_function(pts) # Call the function once to set parameters inside
+#	#		fitter.model[0].setParametersAndErrors(pts, fitter.MINUITerrs)
+#			res = scipy.optimize.minimize(Kmatrix.absInverse,poleMean)
+#			if abs(res.fun) > 100*mfv:
+#				print "No more pole found (mfv = "+str(mfv)+") : fval = "+str(res.fun)
+#				failCount += 1
+#				if failCount > nPoints:
+#					print "Failed to find poles too often.... abort"
+#					return
+#				continue
+#	#			raise ValueError("No more pole found: fval = "+str(res.fun))
+#
+#			poleSamples.append(res.x)
+#			i+=1
+#	#		print i,"Marker to find the PRINT 57473M3N7"
+#		meanPole = [0.,0.]
+#		for p in poleSamples:
+#			meanPole[0] += p[0]
+#			meanPole[1] += p[1]
+#		meanPole[0] /= len(poleSamples)
+#		meanPole[1] /= len(poleSamples)
+#		poleComa = [[0.,0.],[0.,0.]]
+#		for p in poleSamples:
+#			poleComa[0][0] += (p[0]-meanPole[0])**2
+#			poleComa[0][1] += (p[0]-meanPole[0])*(p[1]-meanPole[1])
+#			poleComa[1][0] += (p[1]-meanPole[1])*(p[0]-meanPole[0])
+#			poleComa[1][1] += (p[1]-meanPole[1])**2
+#		poleComa[0][0] /= len(poleSamples)-1
+#		poleComa[0][1] /= len(poleSamples)-1
+#		poleComa[1][0] /= len(poleSamples)-1
+#		poleComa[1][1] /= len(poleSamples)-1
+#		comaString      = str(poleComa)
+#		print " - - - - - - le compaire pramaitre  - - - - - - "
+#		print meanPole, poleMean
+#		print " - - - - - - le compaire pramaitre  - - - - - - "
+#		print poleComa
+#		print "= = = = = = = = = Finished BW error ersimation = = = = = = = = = "
+#		mF2P = 1.9
+#		GF2P =  .277
+#		res  = scipy.optimize.minimize(Kmatrix.absInverse,[mF2P**2,mF2P*GF2P])
+#		print res.x,"pole position"
+#		resSting = str(res.fun)+ " function value should be zero"
+#		print resSting
+#		BWstring = "BW' par: "+str(abs(res.x[0])**.5)+" "+str(abs(res.x[1])/abs(res.x[0])**.5)+" (all absolute values)"
+#		print BWstring
+#		with open(resultFile,'a') as outFile:
+#			outFile.write('\n'+BWstring+" "+resSting+"\ncoma "+comaString)
+#	#		outFile.write('\n'+BWfitString)
+#	#       # - - - - --- Start the evaluations here --- - - - - #       #
+#		doPlots = False
+#		for a in sys.argv:
+#			if a == "plot":
+#				doPlots = True
+#	if ifn is not None:
+#		doPlots = True # Set plots by default, if an inFile is given
+#
+#	if doPlots:
+#		RV = fitter.produceResultViewer(zeroModeParameters,"2-+0+[pi,pi]2++PiS", noRun = True, plotTheory = True)
+#		RV.plotData = True
+#		for b in range(startBin, stopBin):
+#			plotNameBase = "./Kmatrix_plots/2mp0p2ppPiS_<mode>_"+str(b)+"_"+str(tBin)+"_"+str(seedint)+".pdf"
+#			RV.writeBinToPdf(b, stdCmd = ["", plotNameBase.replace("<mode>","intens"), [],  plotNameBase.replace("<mode>","argand"), []])
 #	raw_input("press <enter> to exit")
-	return
-#################################################################################
+#	return
+##################################################################################
 #################################################################################
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### #
 #################################################################################
@@ -742,6 +751,12 @@ def main():
 
 	diffsFull, resolvedWA, nonResolvedWA, comps, resDiffs, nonResDiffs, resolvedDiffsFull,noCorrDiffs = cu.doAllComparisons(allMethods, startBin, methodBinRanges)
 #	print resolvedDiffsFull
+
+	RV = fixedShapes.produceResultViewer(resolvedWA,"2-+0+[pi,pi]2++PiS", noRun = True, plotTheory = True)
+	RV.plotData = True
+	RV.writeBinToPdf(startBin, stdCmd = ["2mp0p2ppS_2D_"+str(tBin)+".pdf","", [], "", []])
+	return
+
 	from math import isnan
 	for pair in resolvedDiffsFull:
 		with  modernplotting.toolkit.PdfWriter('./resolvedDiffPlots/2mp_'+pair[0]+"_"+pair[1]+"_"+str(tBin)+studyAdder+".pdf") as pdfOutput:
@@ -798,7 +813,7 @@ def main():
 #		plot.setXlim(xAxis[0], xAxis[-1])
 #		pdfOutput.savefigAndClose()
 
-	hist = pyRootPwa.ROOT.TH2D("hist","hist", len(studyList)+2, 0, len(studyList)+2, len(studyList), 0, len(studyList))
+	hist = ROOT.TH2D("hist","hist", len(studyList)+2, 0, len(studyList)+2, len(studyList), 0, len(studyList))
 
 	for i,m in enumerate(studyList):
 		for j,n in enumerate(studyList):

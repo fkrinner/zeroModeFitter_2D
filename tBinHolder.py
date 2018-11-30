@@ -8,7 +8,9 @@ class tBinHolder:
 		"""
 		Simplemost initializer
 		"""
-		self.bins = []
+		self.bestChi2UpToNow = float('inf')
+		self.bestPar         = None
+		self.bins            = []
 		
 	def addBin(self, bin):
 		"""
@@ -21,10 +23,14 @@ class tBinHolder:
 		Evaluation of the chi2 function, summed over t'
 		"""
 		chi2 = 0
+#		print "calllolo"
 		for bin in self.bins:
 			chi2 += bin.chi2(params)
 #		print "chi2 call with", params, 'giving', chi2
 #		print ">>>",chi2,"<<<"
+		if chi2 < self.bestChi2UpToNow:
+			self.bestChi2UpToNow = chi2
+			self.bestPar = params[:]
 		return chi2
 
 	def addComaValueForZeroMode(self, val, unitsOf = 'smallestComaValue'):

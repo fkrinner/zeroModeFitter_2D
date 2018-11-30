@@ -1,4 +1,3 @@
-import pyRootPwa
 from waveNameClass import waveName
 from rootfabi import root_open, GetKeyNames
 import numpy as np
@@ -96,19 +95,19 @@ def main(rhoFileName = ""):
 	sectors = ["2-+0+[pi,pi]2++PiS"]
 
 
-#	sectors = std11_0mp0p
+	sectors = std11_0mp0p
 #	sectors = sector_exotic
 #	sectors = std11_1pp0p
 #	sectors = std11_1pp1p
 #	sectors = neg_1P0m
-	sectors = std11_2mp0p
+#	sectors = std11_2mp0p
 #	sectors = std11_2mp1p # + ["2-+1+[pi,pi]2++PiS"]
 #	sectors = std11_2pp1p
 
 #	sectors = ["2-+1+[pi,pi]2++PiS"]
 
-	referenceWave = "4-+0+rhoPiF"
-#	referenceWave = ""
+#	referenceWave = "4-+0+rhoPiF"
+	referenceWave = ""
 
 #	sectors = std11_0mp0p[:1]
 

@@ -4,6 +4,7 @@ referenceWave = "4-+0+rhoPiF"
 
 mPi      = 0.13957018
 mK       = 0.493677
+mTau     = 1.77682
 
 mRho     =  .77549
 Grho     =  .1491

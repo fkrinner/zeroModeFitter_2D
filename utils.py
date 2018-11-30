@@ -1,7 +1,8 @@
 import numpy as np
 import numpy.linalg as la
 import os, sys 
-import pyRootPwa
+#import pyRootPwa
+import ROOT
 
 from math import pi, exp, log, atan, isnan
 
@@ -62,6 +63,10 @@ def getNforSector(sector):
 	"""
 	Gets the number of bind for a sctor
 	"""
+
+	DDDDDDDDDmap = {"KpiSright":28, "KpiPright":43, "KpiDright":32, "KpiSwrong":28, "KpiPwrong":43, "KpiDwrong":32, "piPiS":40, "piPiP":34, "piPiD":33}
+	if sector in DDDDDDDDDmap:
+		return DDDDDDDDDmap[sector]
 	if "Dp" in sector:
 		return getNDp(sector)
 	elif "[pi,pi]0++" in sector:
@@ -111,7 +116,10 @@ def pinv(matrix, numLim = 1.e-13):
 		if abs(val[i]) < numLim:
 			val[i] = 0.
 		elif val[i].real < numLim:
-			raise ValueError("Negative eingenvalue: " + str(val[i]))
+#			print matrix
+			print "NEGATIVE ENCOUNTERED... SET TO ZERO..."
+			val[i] = -1./val[i]
+#			raise ValueError("Negative eingenvalue: " + str(val[i]))
 		else:
 			val[i] = 1./val[i]
 	return np.dot(vec, np.dot(np.diag(val), np.transpose(vec)))
@@ -285,7 +293,7 @@ def get3PiHistogram(name = ""):
 		global globalHistCount
 		name = "hist_"+str(globalHistCount)
 		globalHistCount += 1
-	hist = pyRootPwa.ROOT.TH1D(name, name, 50, 0.5,2.5)
+	hist = ROOT.TH1D(name, name, 50, 0.5,2.5)
 	hist.SetDirectory(0)
 	return hist
 
@@ -324,15 +332,16 @@ def changeReferenceWave(histListReal, histListImag, histListIndx, comaHists, ref
 		for i in range(dim):
 			for j in range(dim):
 				coma[i,j] = comaHists[iComa].GetBinContent(i+1, j+1)
-		refIndex = refHistIndex.GetBinContent(iHist+1)
+		refIndex = int(refHistIndex.GetBinContent(iHist+1))
 		reRef  = refHistReal.GetBinContent(iHist+1)
 		imRef  = refHistImag.GetBinContent(iHist+1)
 		absRef = (reRef**2+imRef**2)**.5
+#		print refIndex, "{} mega-lol", reRef, imRef
 		vals[2*refIndex  ] = reRef
 		vals[2*refIndex+1] = imRef
 		for h in range(len(histListReal)):
 			for i in range(histListReal[h].GetNbinsY()):
-				index = histListIndx[h].GetBinContent(iHist+1, i+1)
+				index = int(histListIndx[h].GetBinContent(iHist+1, i+1))
 				if index == 0:
 					break
 				vals[2*index  ] = histListReal[h].GetBinContent(iHist+1, i+1)
@@ -340,8 +349,6 @@ def changeReferenceWave(histListReal, histListImag, histListIndx, comaHists, ref
 				compl = (histListReal[h].GetBinContent(iHist+1, i+1) + 1.j *histListImag[h].GetBinContent(iHist+1, i+1))*(reRef-1.j*imRef)/absRef
 				histListReal[h].SetBinContent(iHist+1, i+1, compl.real)
 				histListImag[h].SetBinContent(iHist+1, i+1, compl.imag)
-
-
 
 		for i in range(dim/2): # *= (reRef - i imRef)/absRef
 			jacobian[2*i  ,2*i  ] = reRef/absRef # dReNew/dReOld

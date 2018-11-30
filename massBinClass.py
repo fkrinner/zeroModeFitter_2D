@@ -1,4 +1,4 @@
-import pyRootPwa
+#import pyRootPwa
 import numpy as np
 import numpy.linalg as la
 import utils
@@ -639,7 +639,7 @@ class massBin:
 
 	def getOwnTheoryABC(self):
 		"""
-		Gets the A B and C from the own theory functions: chi2(p) = pAP + Bp + C
+		Gets the A B and C from the own theory functions: chi2(p) = pAp + Bp + C
 		"""
 		if not self.chi2init:
 			raise RuntimeError("chi2 not inited, cannot get ABC")
@@ -648,58 +648,45 @@ class massBin:
 		B = np.zeros((2*nTotal))
 		C = 0.
 		countNfunc = self.nZero
+
+		allFuncs = np.zeros((2*nTotal, 2*self.totalBins))
+		allAmpls = np.zeros((2*self.totalBins))
+		for b in range(self.totalBins):
+			allAmpls[2*b  ] = self.reals[b]
+			allAmpls[2*b+1] = self.imags[b]
+		for z in range(self.nZero):
+			for b in range(self.totalBins):
+				allFuncs[2*z  ,2*b  ] = self.zeroModes[z][b].real
+#				allFuncs[2*z+1,2*b  ] =-self.zeroModes[z][b].imag # Zero modes are real
+#				allFuncs[2*z  ,2*b+1] = self.zeroModes[z][b].imag # Zero modes are real
+				allFuncs[2*z+1,2*b+1] = self.zeroModes[z][b].real
+		count = self.nZero
 		for s in range(self.nSect):
 			if not s in self.funcs:
 				continue
 			nFunc  = self.nFuncs[s]
 			masses = self.binCenters[self.borders[s]:self.borders[s+1]]
 			ampls  = [f(masses, externalKinematicVariables = [self.binCenter]) for f in self.funcs[s]]
-			massRange = None
-			if self.hasMassRange:
-				if s in self.massRanges:
-					massRange = self.massRanges[s]
-			a,b,c  = self.getTheoryABC(s, ampls, massRange = massRange)
-			for i in range(len(b)):
-				if not b[i].imag == 0.:
-					if abs(b[i].imag) > self.numLim:
-						raise ValueError("Complex value in b " + str(b[i]))
-					else:
-						b[i] = b[i].real
-				for j in range(len(b)):
-					if not a[i,j].imag == 0.:
-						if abs(a[i,j].imag) > self.numLim:
-							raise ValueError("Complex value in a " + str(a[i,j]))
-						else:
-							a[i,j] = a[i,j].real
-			for i in range(self.nZero):
-				B[2*i  ] += b[2*i  ].real
-				B[2*i+1] += b[2*i+1].real
-				for j in range(self.nZero):
-					A[2*i  ,2*j  ] += a[2*i  ,2*j  ].real
-					A[2*i  ,2*j+1] += a[2*i  ,2*j+1].real
-					A[2*i+1,2*j  ] += a[2*i+1,2*j  ].real
-					A[2*i+1,2*j+1] += a[2*i+1,2*j+1].real
-				for j in range(nFunc):
-					A[2*i  ,2*(j+countNfunc)  ] += a[2*i  ,2*(self.nZero+j)  ].real
-					A[2*i  ,2*(j+countNfunc)+1] += a[2*i  ,2*(self.nZero+j)+1].real
-					A[2*i+1,2*(j+countNfunc)  ] += a[2*i+1,2*(self.nZero+j)  ].real
-					A[2*i+1,2*(j+countNfunc)+1] += a[2*i+1,2*(self.nZero+j)+1].real
+			for ampl in ampls:
+				for b,a in enumerate(ampl):
+					bin = self.borders[s] + b
+					allFuncs[2*count  ,2*bin  ] =-a.real * self.norms[bin]**.5
+					allFuncs[2*count+1,2*bin  ] = a.imag * self.norms[bin]**.5
+					allFuncs[2*count  ,2*bin+1] =-a.imag * self.norms[bin]**.5
+					allFuncs[2*count+1,2*bin+1] =-a.real * self.norms[bin]**.5
+				count += 1
+		# # # Do not handle mass ranges here, it is take care of by the coma
+		CC   = np.dot(allAmpls, np.dot(self.comaInv, allAmpls))
+		CIZF = np.dot(allFuncs, self.comaInv) # comaInf * zeroModes & Functions
+		BB   = 2*np.dot(CIZF, allAmpls)
+		AA   = np.dot(CIZF, allFuncs.T)
+		try:
+			utils.pinv(AA+AA.T)
+		except:
+			print allFuncs
 
-					A[2*(j+countNfunc)  ,2*i  ] += a[2*(self.nZero+j)  ,2*i  ].real
-					A[2*(j+countNfunc)  ,2*i+1] += a[2*(self.nZero+j)  ,2*i+1].real
-					A[2*(j+countNfunc)+1,2*i  ] += a[2*(self.nZero+j)+1,2*i  ].real
-					A[2*(j+countNfunc)+1,2*i+1] += a[2*(self.nZero+j)+1,2*i+1].real
-			for i in range(nFunc):
-				B[2*(i+countNfunc)  ] += b[2*(self.nZero+i)  ].real
-				B[2*(i+countNfunc)+1] += b[2*(self.nZero+i)+1].real
-				for j in range(nFunc):
-					A[2*(i+countNfunc)  ,2*(j+countNfunc)  ] += a[2*(self.nZero+i)  ,2*(self.nZero+j)  ].real
-					A[2*(i+countNfunc)  ,2*(j+countNfunc)+1] += a[2*(self.nZero+i)  ,2*(self.nZero+j)+1].real
-					A[2*(i+countNfunc)+1,2*(j+countNfunc)  ] += a[2*(self.nZero+i)+1,2*(self.nZero+j)  ].real
-					A[2*(i+countNfunc)+1,2*(j+countNfunc)+1] += a[2*(self.nZero+i)+1,2*(self.nZero+j)+1].real
-			C += c
-			countNfunc += nFunc
-		return A,B,C
+
+		return AA,BB,CC
 
 	def setZeroTheory(self):
 		"""
@@ -732,11 +719,11 @@ class massBin:
 					raise ValueError("Format of sectParFunctMap is wrong")
 			for i,b in enumerate(range(startBin, stopBin)):
 				self.theo[b] = ampl[i]*self.norms[b]**.5
-				if self.hasMassRange:
-					if s in self.massRanges:
-						binCenterMass = self.binCenters[b]
-						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
-							self.theo[b] = 0.+0.j
+#				if self.hasMassRange: # # # Mass ranges are hendeled by the COMA now
+#					if s in self.massRanges:
+#						binCenterMass = self.binCenters[b]
+#						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
+#							self.theo[b] = 0.+0.j
 		self.hasTheo = True
 
 	def unifyComa(self):
@@ -805,6 +792,8 @@ class massBin:
 		"""
 		Removes the dorection of the zero-mode from the covariance matrix
 		"""
+#		print "BUGGGGGGGGGGGGGGGGGGGGGGG#EFAHR"
+#		return
 #		print 'Remove zm'
 		if self.zeroModesRemovedFromComa:
 			print "DO NOT REMOVE ZER MODE A SECOND TIME"
@@ -826,6 +815,8 @@ class massBin:
 		self.specialCOMAs = {}
 
 	def addComaValueForZeroMode(self, val, unitsOf = 'smallestComaValue'):
+#		print "BUGGGGGGGGGGGGGGGGGGGGGGG#EFAHR"
+#		return
 		if not self.zeroModesRemovedFromComa:
 			raise RuntimeError("Call 'removeZeroModeFromComa()' first.")
 		if unitsOf == 'smallestComaValue':
@@ -948,11 +939,11 @@ class massBin:
 			countFunc += nFunc
 			for i,b in enumerate(range(self.borders[s],self.borders[s+1])):
 				self.theo[b] = ampl[i]*self.norms[b]**.5
-				if self.hasMassRange and restrictToRange:
-					if s in self.massRanges:
-						binCenterMass = self.binCenters[b]
-						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
-							self.theo[b] = 0.+0.j
+#				if self.hasMassRange and restrictToRange: # Mass Ranges are handeled by the COMA now
+#					if s in self.massRanges:
+#						binCenterMass = self.binCenters[b]
+#						if binCenterMass < self.massRanges[s][0] or binCenterMass >= self.massRanges[s][1]:
+#							self.theo[b] = 0.+0.j
 		self.hasTheo = True
 
 	def getNDF(self):
@@ -1045,7 +1036,7 @@ class massBin:
 
 	def getTheoryABC(self, sector, parametrizations, massRange = None):
 		"""
-		Gets the A B and C for evalueations from the set theory: chi2(p) = pAP + Bp + C
+		Gets the A B and C for evaluations from the set theory: chi2(p) = pAP + Bp + C
 		"""
 		nPara   = len(parametrizations)
 		if sector < 0 or sector >= self.nSect:
@@ -1060,11 +1051,11 @@ class massBin:
 		ZP    = np.zeros((2*(self.nZero + nPara), 2*self.totalBins))
 		count = 0
 		for bin in range(nBinMin, nBinMax):
-			if massRange:
-				mass = self.binCenters[bin]
-				if mass < massRange[0] or mass >= massRange[1]:
-					count += 1
-					continue
+#			if massRange: # # # Mass ranges are handeled by the coma now
+#				mass = self.binCenters[bin]
+#				if mass < massRange[0] or mass >= massRange[1]:
+#					count += 1
+#					continue
 			Ampls[2*bin  ] = self.reals[bin]
 			Ampls[2*bin+1] = self.imags[bin]
 			for z in range(self.nZero):
