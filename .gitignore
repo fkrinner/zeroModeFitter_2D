@@ -18,6 +18,9 @@ resultFilesConsistency/
 results/
 vectorFormFactor_plots_1mp_pngs/
 vectorFormFactor_plots_pngs/
+comparisonResults3pp/
+comparisonResultsData_1mp/
+comparisonResults_rest/
 
 *.pyc
 *.txt
@@ -67,6 +70,9 @@ sys
 unnamed.C
 wavelist.allWaveList
 zeroModeCorrections_std11
+cp4ppToRelNote
+doPhaseFits
+extractTotalsToTextFilepy.py
 
 #	compareRanges.py
 #	makePhasePlots.py
