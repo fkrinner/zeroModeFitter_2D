@@ -1,6 +1,0 @@
-self.plotData = False
-self.mMax     = 1.5
-
-self.titleRight = r"$1^{++}1^+[\pi\pi]_{1^{--}}\pi S$"
-self.titleRight = r"$2^{-+}1^+[\pi\pi]_{1^{--}}\pi P$"
-self.titleRight = r"$2^{++}1^+[\pi\pi]_{1^{--}}\pi D$"
